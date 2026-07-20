@@ -26,12 +26,12 @@ O projeto foi construído para Android, iOS e web com a mesma base em React Nati
 
 - Rastreamento em primeiro e segundo plano no aplicativo nativo.
 - Atualização por Supabase Realtime com consulta de recuperação a cada 15 segundos.
-- Mapa vetorial MapLibre/OpenFreeMap, sem chave paga de mapas.
+- Mapa vetorial MapLibre com o estilo OSM Liberty do OpenFreeMap, sem chave paga de mapas.
 - Exibição exclusiva de membros online e com posição recente.
 - Marcadores com foto, apelido e estado da posição.
 - Filtro de ruído do GPS para reduzir deslocamentos laterais quando o aparelho está parado.
 - Fila local para reenviar posições após perda de conexão.
-- ID público único por integrante, pesquisável em equipe e administração.
+- ID público único gerado automaticamente no formato `ABC12345`, pesquisável em equipe e administração.
 - Cadastro com limites, normalização e validação também no servidor e no banco.
 - Temas claro e escuro persistidos no aparelho.
 - Administração master e administração isolada por equipe.
@@ -95,7 +95,7 @@ MotoTrack/
 - Zustand com AsyncStorage para estados persistidos.
 - TanStack Query para cache, polling e sincronização.
 - Supabase Auth, Postgres, Storage, Realtime e Edge Functions.
-- MapLibre Native e MapLibre GL Web.
+- MapLibre Native e MapLibre GL Web com OSM Liberty/OpenFreeMap.
 - Expo Location, Task Manager, NetInfo e Secure Store.
 
 ## Preparando o ambiente

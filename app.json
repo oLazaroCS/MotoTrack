@@ -21,6 +21,7 @@
     },
     "android": {
       "package": "com.mototrack.app",
+      "softwareKeyboardLayoutMode": "resize",
       "adaptiveIcon": {
         "foregroundImage": "./assets/icon.png",
         "backgroundColor": "#071A33"

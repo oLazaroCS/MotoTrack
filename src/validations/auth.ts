@@ -5,7 +5,6 @@ export const LIMITS = {
   nickname: 30,
   email: 254,
   phone: 20,
-  memberId: 24,
   teamCode: 64,
   password: 128,
   teamName: 80,
@@ -13,11 +12,9 @@ export const LIMITS = {
 } as const;
 
 export const PASSWORD_REQUIREMENTS = 'Use de 8 a 128 caracteres, incluindo letra maiúscula, minúscula, número e símbolo.';
-export const MEMBER_ID_REQUIREMENTS = 'Use de 3 a 24 caracteres: letras, números, hífen ou sublinhado.';
 
 export const normalizePhone = (phone: string) => phone.replace(/\D/g, '');
 export const isValidPhone = (phone: string) => /^\d{10,15}$/.test(normalizePhone(phone));
-export const isValidMemberId = (memberId: string) => /^[A-Za-z0-9_-]{3,24}$/.test(memberId.trim());
 export const isValidEmail = (email: string) => email.length <= LIMITS.email && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
 
 export const strongPasswordSchema = z.string().max(LIMITS.password, `Use no máximo ${LIMITS.password} caracteres`).refine(
@@ -38,7 +35,6 @@ export const registerSchema = z.object({
   name: z.string().trim().min(3, 'Informe seu nome completo').max(LIMITS.name, `Use no máximo ${LIMITS.name} caracteres`),
   nickname: z.string().trim().min(2, 'Informe um apelido').max(LIMITS.nickname, `Use no máximo ${LIMITS.nickname} caracteres`),
   phone: z.string().max(LIMITS.phone).refine(isValidPhone, 'Informe um telefone válido com DDD'),
-  driverCode: z.string().trim().refine(isValidMemberId, MEMBER_ID_REQUIREMENTS),
   teamCode: z.string().trim().min(6, 'Informe o código da equipe').max(LIMITS.teamCode, `Use no máximo ${LIMITS.teamCode} caracteres`),
 });
 

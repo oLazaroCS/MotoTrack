@@ -5,7 +5,7 @@ import { Shield, Trash2, UserCheck, Users } from 'lucide-react-native';
 import { Avatar } from '@/components/avatar';
 import { ActionIcon, PageIntro, SectionLabel, StatCard } from '@/components/design';
 import { AppText, Card, Field, Screen, StatusDot } from '@/components/ui';
-import { colors, spacing } from '@/constants/theme';
+import { spacing } from '@/constants/theme';
 import { useTeamDrivers } from '@/hooks/use-team-drivers';
 import { deleteManagedUser, updateManagedUser } from '@/services/admin';
 import { useAuthStore } from '@/stores/auth-store';

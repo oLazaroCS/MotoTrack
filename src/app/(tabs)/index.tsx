@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Alert, Platform, Pressable, StyleSheet, View } from 'react-native';
 import { router } from 'expo-router';
-import { LocateFixed, Map, Navigation, Radio, Users } from 'lucide-react-native';
+import { Image } from 'expo-image';
+import { LocateFixed, Map, Radio, Users } from 'lucide-react-native';
 import { Avatar } from '@/components/avatar';
 import { Notice } from '@/components/notice';
 import { AppText, Button, Card, Screen, StatusDot } from '@/components/ui';
@@ -99,7 +100,7 @@ export default function HomeScreen() {
   return <Screen style={styles.screen}>
     <View style={styles.brandHeader}>
       <View style={styles.brand}>
-        <View style={styles.brandMark}><Navigation size={20} strokeWidth={2.4} color={colors.navy}/></View>
+        <View style={styles.brandMark}><Image source={require('../../../assets/icon.png')} contentFit="cover" style={styles.brandLogo}/></View>
         <View><AppText size={12} weight="600" style={styles.eyebrow}>CENTRAL DE OPERAÇÕES</AppText><AppText size={20} weight="800">MotoTrack</AppText></View>
       </View>
       <Avatar uri={profile?.avatar_url} size={44}/>
@@ -154,7 +155,8 @@ const styles = StyleSheet.create({
   screen: { paddingTop: spacing.md, paddingBottom: spacing.xl, gap: spacing.md },
   brandHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   brand: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  brandMark: { width: 40, height: 40, borderRadius: radius.md, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.amber },
+  brandMark: { width: 44, height: 44, borderRadius: radius.md, borderWidth: 1, borderColor: colors.amber, overflow: 'hidden' },
+  brandLogo: { width: '100%', height: '100%' },
   eyebrow: { color: colors.amber, letterSpacing: .8, lineHeight: 16 },
   welcomeRow: { flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between', gap: spacing.md, paddingTop: spacing.sm },
   welcomeCopy: { flex: 1, gap: 2 },
