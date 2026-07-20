@@ -1,0 +1,88 @@
+{
+  "expo": {
+    "name": "MotoTrack",
+    "slug": "mototrack",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "scheme": "mototrack",
+    "userInterfaceStyle": "automatic",
+    "icon": "./assets/icon.png",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.mototrack.app",
+      "infoPlist": {
+        "UIBackgroundModes": [
+          "location",
+          "remote-notification"
+        ],
+        "NSLocationWhenInUseUsageDescription": "O MotoTrack usa sua localização para mostrar sua posição à equipe enquanto você estiver online.",
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "O MotoTrack atualiza sua posição durante o trabalho mesmo com o app em segundo plano."
+      }
+    },
+    "android": {
+      "package": "com.mototrack.app",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/icon.png",
+        "backgroundColor": "#071A33"
+      },
+      "permissions": [
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_BACKGROUND_LOCATION",
+        "FOREGROUND_SERVICE",
+        "FOREGROUND_SERVICE_LOCATION",
+        "POST_NOTIFICATIONS"
+      ]
+    },
+    "web": {
+      "bundler": "metro",
+      "favicon": "./assets/icon.png"
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/icon.png",
+          "imageWidth": 160,
+          "resizeMode": "contain",
+          "backgroundColor": "#071A33",
+          "dark": {
+            "backgroundColor": "#071A33"
+          }
+        }
+      ],
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "Permita que o MotoTrack acompanhe sua localização enquanto você estiver online.",
+          "isAndroidBackgroundLocationEnabled": true,
+          "isIosBackgroundLocationEnabled": true
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "color": "#F6A800"
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Permita o acesso às fotos para atualizar seu perfil."
+        }
+      ],
+      "expo-secure-store"
+    ],
+    "experiments": {
+      "typedRoutes": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "23bc490b-7cca-42ac-9226-94f894d879d2"
+      }
+    },
+    "owner": "olazarocs"
+  }
+}
