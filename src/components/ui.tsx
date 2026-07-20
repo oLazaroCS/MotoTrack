@@ -1,5 +1,5 @@
 import { cloneElement, isValidElement, useState, type PropsWithChildren, type ReactElement, type ReactNode } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, View, type PressableProps, type TextInputProps, type TextProps, type ViewStyle } from 'react-native';
+import { ActivityIndicator, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View, type PressableProps, type TextInputProps, type TextProps, type ViewStyle } from 'react-native';
 import { useTheme } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { colors, fonts, radius, spacing } from '@/constants/theme';
@@ -7,7 +7,7 @@ import { colors, fonts, radius, spacing } from '@/constants/theme';
 export function Screen({ children, scroll = true, style }: PropsWithChildren<{ scroll?: boolean; style?: ViewStyle }>) {
   const theme = useTheme();
   const content = <View style={[styles.content, style]}>{children}</View>;
-  return <SafeAreaView style={[styles.safe, { backgroundColor: theme.colors.background }]} edges={['top']}>{scroll ? <ScrollView contentContainerStyle={styles.scroll}>{content}</ScrollView> : content}</SafeAreaView>;
+  return <SafeAreaView style={[styles.safe, { backgroundColor: theme.colors.background }]} edges={['top']}>{scroll ? <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled" keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'} automaticallyAdjustKeyboardInsets contentInsetAdjustmentBehavior="automatic">{content}</ScrollView> : content}</SafeAreaView>;
 }
 
 export function AppText({ children, tone = 'default', size = 15, weight = '400', style, ...props }: PropsWithChildren<{ tone?: 'default' | 'muted' | 'danger' | 'success'; size?: number; weight?: '400' | '500' | '600' | '700' | '800' } & Omit<TextProps, 'children'>>) {
@@ -30,7 +30,20 @@ export function Field({ label, error, ...props }: TextInputProps & { label: stri
   const theme = useTheme();
   const [focused, setFocused] = useState(false);
   const { onFocus, onBlur, ...inputProps } = props;
-  return <View style={styles.fieldWrap}><AppText weight="600" size={12} style={styles.fieldLabel}>{label.toUpperCase()}</AppText><TextInput placeholderTextColor={colors.gray} style={[styles.field, { color: theme.colors.text, backgroundColor: theme.colors.card, borderColor: error ? colors.red : focused ? colors.amber : theme.colors.border }]} onFocus={(event) => { setFocused(true); onFocus?.(event); }} onBlur={(event) => { setFocused(false); onBlur?.(event); }} {...inputProps}/>{error ? <AppText tone="danger" size={12}>{error}</AppText> : null}</View>;
+  const semanticProps = semanticInputProps(label, Boolean(props.secureTextEntry));
+  return <View style={styles.fieldWrap}><AppText weight="600" size={12} style={styles.fieldLabel}>{label.toUpperCase()}</AppText><TextInput {...semanticProps} placeholderTextColor={colors.gray} style={[styles.field, { color: theme.colors.text, backgroundColor: theme.colors.card, borderColor: error ? colors.red : focused ? colors.amber : theme.colors.border }]} onFocus={(event) => { setFocused(true); onFocus?.(event); }} onBlur={(event) => { setFocused(false); onBlur?.(event); }} {...inputProps}/>{error ? <AppText tone="danger" size={12}>{error}</AppText> : null}</View>;
+}
+
+function semanticInputProps(label: string, secure: boolean): Partial<TextInputProps> {
+  const normalized = label.toLocaleLowerCase('pt-BR');
+  if (normalized.includes('e-mail') || normalized.includes('email')) return { autoCapitalize: 'none', autoComplete: 'email', autoCorrect: false, importantForAutofill: 'yes', inputMode: 'email', keyboardType: 'email-address', spellCheck: false, textContentType: 'emailAddress' };
+  if (normalized.includes('telefone')) return { autoComplete: 'tel', importantForAutofill: 'yes', inputMode: 'tel', keyboardType: 'phone-pad', textContentType: 'telephoneNumber' };
+  if (secure || normalized.includes('senha')) {
+    const isNew = normalized.includes('nova') || normalized.includes('temporária');
+    return { autoComplete: isNew ? 'new-password' : 'current-password', importantForAutofill: 'yes', textContentType: isNew ? 'newPassword' : 'password' };
+  }
+  if (normalized === 'nome' || normalized === 'nome completo') return { autoCapitalize: 'words', autoComplete: 'name', importantForAutofill: 'yes', textContentType: 'name' };
+  return {};
 }
 
 export function Card({ children, style }: PropsWithChildren<{ style?: ViewStyle }>) {

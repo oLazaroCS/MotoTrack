@@ -7,7 +7,7 @@ import { Crosshair, Users } from 'lucide-react-native';
 import { DriverSheet } from '@/components/driver-sheet';
 import { AppText, Button } from '@/components/ui';
 import { colors, spacing } from '@/constants/theme';
-import { DARK_MAP_STYLE } from '@/constants/map-style';
+import { MAP_STYLE_URL } from '@/constants/map-style';
 import { useTeamDrivers } from '@/hooks/use-team-drivers';
 import { getPreciseLocation } from '@/services/tracking';
 import { useAuthStore } from '@/stores/auth-store';
@@ -36,7 +36,7 @@ export default function TeamMapWebScreen() {
   useEffect(() => {
     if (!container.current || map.current) return;
     const markerRegistry = markers.current;
-    const instance = new maplibregl.Map({ container: container.current, style: DARK_MAP_STYLE, center: [-46.6333, -23.5505], zoom: 11, attributionControl: { compact: true } });
+    const instance = new maplibregl.Map({ container: container.current, style: MAP_STYLE_URL, center: [-46.6333, -23.5505], zoom: 11, attributionControl: { compact: true } });
     instance.addControl(new maplibregl.NavigationControl({ showCompass: true }), 'top-right');
     instance.on('load', () => setMapReady(true));
     instance.on('click', () => setSelectedId(null));

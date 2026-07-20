@@ -11,10 +11,10 @@ import { LIMITS, normalizePhone, registerSchema, type RegisterInput } from '@/va
 
 export default function RegisterScreen() {
   const [message, setMessage] = useState<string | null>(null);
-  const { control, handleSubmit, formState: { errors, isSubmitting } } = useForm<RegisterInput>({ resolver: zodResolver(registerSchema), defaultValues: { name: '', nickname: '', email: '', phone: '', driverCode: '', teamCode: '', password: '' } });
+  const { control, handleSubmit, formState: { errors, isSubmitting } } = useForm<RegisterInput>({ resolver: zodResolver(registerSchema), defaultValues: { name: '', nickname: '', email: '', phone: '', teamCode: '', password: '' } });
   const submit = handleSubmit(async (values) => {
     setMessage(null);
-    const { data, error } = await supabase.auth.signUp({ email: values.email.trim(), password: values.password, options: { data: { name: values.name.trim(), nickname: values.nickname.trim(), phone: normalizePhone(values.phone), driver_code: values.driverCode.trim().toUpperCase(), team_code: values.teamCode.trim().toUpperCase() } } });
+    const { data, error } = await supabase.auth.signUp({ email: values.email.trim(), password: values.password, options: { data: { name: values.name.trim(), nickname: values.nickname.trim(), phone: normalizePhone(values.phone), team_code: values.teamCode.trim().toUpperCase() } } });
     if (error) return setMessage(error.message);
     if (!data.session) {
       Alert.alert('Confirme seu e-mail', 'Enviamos um link de confirmação. Depois de confirmar, entre com sua senha.');
@@ -30,7 +30,7 @@ export default function RegisterScreen() {
       <Controller control={control} name="nickname" render={({ field }) => <Field label="Apelido" placeholder="Ex.: Mari" maxLength={LIMITS.nickname} value={field.value} onChangeText={field.onChange} error={errors.nickname?.message}/>}/>
       <Controller control={control} name="email" render={({ field }) => <Field label="E-mail" placeholder="nome@empresa.com" maxLength={LIMITS.email} keyboardType="email-address" autoCapitalize="none" value={field.value} onChangeText={field.onChange} error={errors.email?.message}/>}/>
       <Controller control={control} name="phone" render={({ field }) => <Field label="Telefone com DDD" placeholder="(11) 99999-9999" maxLength={LIMITS.phone} keyboardType="phone-pad" value={field.value} onChangeText={field.onChange} error={errors.phone?.message}/>}/>
-      <Controller control={control} name="driverCode" render={({ field }) => <Field label="ID único do membro" placeholder="Ex.: MOTO-001" maxLength={LIMITS.memberId} autoCapitalize="characters" value={field.value} onChangeText={field.onChange} error={errors.driverCode?.message}/>}/>
+      <AppText tone="muted" size={12}>Seu ID exclusivo será gerado automaticamente ao finalizar o cadastro.</AppText>
       <Controller control={control} name="teamCode" render={({ field }) => <Field label="Código da equipe" placeholder="Código fornecido pela equipe" maxLength={LIMITS.teamCode} autoCapitalize="characters" value={field.value} onChangeText={field.onChange} error={errors.teamCode?.message}/>}/>
       <Controller control={control} name="password" render={({ field }) => <Field label="Senha" placeholder="8 ou mais caracteres" maxLength={LIMITS.password} secureTextEntry value={field.value} onChangeText={field.onChange} error={errors.password?.message}/>}/>
       {message ? <AppText tone="danger">{message}</AppText> : null}<Button title="Cadastrar" onPress={submit} loading={isSubmitting}/>

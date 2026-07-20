@@ -8,7 +8,7 @@ import { AnimatedDriverMarker } from '@/components/animated-driver-marker';
 import { DriverSheet } from '@/components/driver-sheet';
 import { AppText, Button } from '@/components/ui';
 import { colors, spacing } from '@/constants/theme';
-import { DARK_MAP_STYLE } from '@/constants/map-style';
+import { MAP_STYLE_URL } from '@/constants/map-style';
 import { useTeamDrivers } from '@/hooks/use-team-drivers';
 import { useAuthStore } from '@/stores/auth-store';
 import type { DriverWithLocation } from '@/types/domain';
@@ -33,7 +33,7 @@ export default function TeamMapScreen() {
     );
   }, [driverId, mapReady, online]);
   const myLocation = async () => { if (me) { camera.current?.easeTo({ center: [me.longitude, me.latitude], zoom: 16, duration: 550 }); return; } const permission = await Location.requestForegroundPermissionsAsync(); if (permission.status !== 'granted') return; const location = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced }); camera.current?.easeTo({ center: [location.coords.longitude, location.coords.latitude], zoom: 16, duration: 550 }); };
-  return <View style={styles.fill}><Map mapStyle={DARK_MAP_STYLE} style={styles.fill} compass attribution logo onDidFinishLoadingMap={() => setMapReady(true)}>
+  return <View style={styles.fill}><Map mapStyle={MAP_STYLE_URL} style={styles.fill} compass attribution logo onDidFinishLoadingMap={() => setMapReady(true)}>
     <Camera ref={camera} initialViewState={{ center: [-46.6333, -23.5505], zoom: 11 }} minZoom={3} maxZoom={19} />
     {online.map((driver) => <AnimatedDriverMarker key={driver.id} driver={driver} selected={selected?.id === driver.id} onPress={() => { setSelectedId(driver.id); center(driver); }}/>)}</Map>
     <View style={styles.top}><View style={styles.badge}><Users size={18} color={colors.amber}/><AppText weight="700" style={styles.overlayText}>{online.length} online</AppText></View></View>

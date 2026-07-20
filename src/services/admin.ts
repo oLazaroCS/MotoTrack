@@ -6,7 +6,6 @@ export type CreateManagedUser = {
   nickname: string;
   email: string;
   phone: string;
-  driverCode: string;
   password: string;
   role: UserRole;
   teamId: string;
@@ -17,7 +16,6 @@ export type ManagedUserChanges = Partial<{
   nickname: string;
   email: string;
   phone: string;
-  driver_code: string;
   password: string;
   team_id: string;
   role: UserRole;

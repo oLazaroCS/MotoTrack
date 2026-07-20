@@ -6,12 +6,11 @@ const cors = {
 };
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { ...cors, 'Content-Type': 'application/json' } });
 
-const limits = { name: 80, nickname: 30, email: 254, phone: 15, memberId: 24, password: 128, teamName: 80, teamTag: 24, teamCode: 64 } as const;
+const limits = { name: 80, nickname: 30, email: 254, phone: 15, password: 128, teamName: 80, teamTag: 24, teamCode: 64 } as const;
 const textValue = (value: unknown) => String(value ?? '').trim();
 const normalizePhone = (value: unknown) => textValue(value).replace(/\D/g, '');
 const validEmail = (value: unknown) => { const email = textValue(value); return email.length <= limits.email && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email); };
 const validPhone = (value: unknown) => /^\d{10,15}$/.test(normalizePhone(value));
-const validMemberId = (value: unknown) => /^[A-Za-z0-9_-]{3,24}$/.test(textValue(value));
 const validPassword = (value: unknown) => { const password = String(value ?? ''); return password.length >= 8 && password.length <= limits.password && /[a-z]/.test(password) && /[A-Z]/.test(password) && /\d/.test(password) && /[^A-Za-z0-9]/.test(password); };
 const validName = (value: unknown) => { const name = textValue(value); return name.length >= 3 && name.length <= limits.name; };
 const validNickname = (value: unknown) => { const nickname = textValue(value); return nickname.length >= 2 && nickname.length <= limits.nickname; };
@@ -130,12 +129,11 @@ Deno.serve(async (req) => {
     if (body.action === 'create-user') {
       if (!isMaster) return json({ error: 'Apenas o master pode criar usuários diretamente' }, 403);
       const input = body.user;
-      if (!input?.email || !input?.password || !input?.name || !input?.nickname || !input?.driverCode || !input?.teamId) return json({ error: 'Dados obrigatórios ausentes' }, 400);
+      if (!input?.email || !input?.password || !input?.name || !input?.nickname || !input?.teamId) return json({ error: 'Dados obrigatórios ausentes' }, 400);
       if (!validName(input.name)) return json({ error: 'Nome inválido' }, 400);
       if (!validNickname(input.nickname)) return json({ error: 'Apelido inválido' }, 400);
       if (!validEmail(input.email)) return json({ error: 'E-mail inválido' }, 400);
       if (!validPhone(input.phone)) return json({ error: 'Telefone inválido' }, 400);
-      if (!validMemberId(input.driverCode)) return json({ error: 'ID do membro inválido' }, 400);
       if (!validPassword(input.password)) return json({ error: 'A senha não atende aos requisitos de segurança' }, 400);
       const { data: team, error: teamError } = await admin.from('teams').select('join_code').eq('id', input.teamId).single();
       if (teamError) throw teamError;
@@ -143,7 +141,7 @@ Deno.serve(async (req) => {
         email: textValue(input.email).toLowerCase(),
         password: input.password,
         email_confirm: true,
-        user_metadata: { name: textValue(input.name), nickname: textValue(input.nickname), phone: normalizePhone(input.phone), driver_code: textValue(input.driverCode).toUpperCase(), team_code: team.join_code },
+        user_metadata: { name: textValue(input.name), nickname: textValue(input.nickname), phone: normalizePhone(input.phone), team_code: team.join_code },
       });
       if (error) throw error;
       const { error: profileError } = await admin.from('profiles').update({ role: input.role === 'admin' ? 'admin' : 'driver', account_status: 'active' }).eq('id', created.user.id);
@@ -158,14 +156,13 @@ Deno.serve(async (req) => {
     if (!isMaster && target.id === user.id) return json({ error: 'Você não pode alterar a própria função' }, 400);
 
     if (body.action === 'update-user') {
-      const masterFields = ['name', 'nickname', 'phone', 'driver_code', 'team_id', 'role', 'account_status'];
+      const masterFields = ['name', 'nickname', 'phone', 'team_id', 'role', 'account_status'];
       const teamAdminFields = ['role', 'account_status'];
       const allowedKeys = isMaster ? masterFields : teamAdminFields;
       const changes = Object.fromEntries(Object.entries(body.changes || {}).filter(([key]) => allowedKeys.includes(key)));
       if (changes.name !== undefined && !validName(changes.name)) return json({ error: 'Nome inválido' }, 400);
       if (changes.nickname !== undefined && !validNickname(changes.nickname)) return json({ error: 'Apelido inválido' }, 400);
       if (changes.phone !== undefined) { if (!validPhone(changes.phone)) return json({ error: 'Telefone inválido' }, 400); changes.phone = normalizePhone(changes.phone); }
-      if (changes.driver_code !== undefined) { if (!validMemberId(changes.driver_code)) return json({ error: 'ID do membro inválido' }, 400); changes.driver_code = textValue(changes.driver_code).toUpperCase(); }
       if (!isMaster && changes.role && !['driver', 'admin'].includes(String(changes.role))) return json({ error: 'Função inválida' }, 400);
       if (!isMaster && changes.account_status && !['active', 'inactive'].includes(String(changes.account_status))) return json({ error: 'Status inválido' }, 400);
       const authChanges: { email?: string; password?: string } = {};
