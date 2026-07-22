@@ -61,7 +61,7 @@ export default function TeamMapWebScreen() {
       entry.photo.style.borderColor = selected?.id === driver.id ? colors.amber : colors.darkLine;
       entry.name.textContent = driver.nickname || driver.name.split(' ')[0] || driver.name;
       entry.status.style.backgroundColor = isStale(location.updated_at) ? colors.stale : colors.green;
-      if (driver.avatar_url && entry.avatar) entry.avatar.src = driver.avatar_url;
+      syncMarkerAvatar(entry, driver.avatar_url, driver.name);
       entry.marker.setLngLat([location.longitude, location.latitude]);
     });
   }, [online, selected?.id]);
@@ -126,14 +126,6 @@ function createMarker(driver: DriverWithLocation, onPress: () => void): MarkerEn
   Object.assign(initials.style, { color: colors.onSurface, font: '800 18px Inter, system-ui' });
   photo.appendChild(initials);
   let avatar: HTMLImageElement | null = null;
-  if (driver.avatar_url) {
-    avatar = document.createElement('img');
-    avatar.src = driver.avatar_url;
-    avatar.alt = '';
-    Object.assign(avatar.style, { position: 'absolute', inset: '0', width: '100%', height: '100%', objectFit: 'cover' });
-    avatar.addEventListener('error', () => avatar?.remove());
-    photo.appendChild(avatar);
-  }
   const status = document.createElement('span');
   Object.assign(status.style, { position: 'absolute', right: '1px', bottom: '1px', width: '12px', height: '12px', borderRadius: '6px', border: `2px solid ${colors.darkBg}`, background: colors.green });
   photo.appendChild(status);
@@ -144,7 +136,26 @@ function createMarker(driver: DriverWithLocation, onPress: () => void): MarkerEn
   name.textContent = driver.nickname || driver.name.split(' ')[0] || driver.name;
   Object.assign(name.style, { position: 'relative', marginTop: '-3px', maxWidth: '84px', padding: '3px 7px', border: `1px solid ${colors.darkLine}`, borderRadius: '4px', background: colors.darkCard, color: colors.onSurface, boxShadow: '0 2px 6px #0008', font: '700 11px Inter, system-ui', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' });
   element.append(photo, pin, name);
-  return { marker: new maplibregl.Marker({ element, anchor: 'bottom' }), element, photo, avatar, name, status };
+  const entry = { marker: new maplibregl.Marker({ element, anchor: 'bottom' }), element, photo, avatar, name, status };
+  syncMarkerAvatar(entry, driver.avatar_url, driver.name);
+  return entry;
+}
+
+function syncMarkerAvatar(entry: MarkerEntry, uri: string | null, memberName: string) {
+  if (!uri) {
+    entry.avatar?.remove();
+    entry.avatar = null;
+    return;
+  }
+  if (!entry.avatar) {
+    const avatar = document.createElement('img');
+    avatar.alt = `Foto de ${memberName}`;
+    Object.assign(avatar.style, { position: 'absolute', inset: '0', width: '100%', height: '100%', objectFit: 'cover' });
+    avatar.addEventListener('error', () => { avatar.remove(); if (entry.avatar === avatar) entry.avatar = null; });
+    entry.photo.appendChild(avatar);
+    entry.avatar = avatar;
+  }
+  if (entry.avatar.src !== uri) entry.avatar.src = uri;
 }
 
 const styles = StyleSheet.create({ fill: { flex: 1 }, top: { position: 'absolute', top: spacing.md, left: spacing.md }, badge: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, backgroundColor: colors.darkCard, paddingHorizontal: spacing.md, height: 42, borderWidth: 1, borderColor: colors.darkLine, borderRadius: 8, boxShadow: '0 3px 10px #0008' }, locate: { position: 'absolute', right: spacing.md, bottom: 42, width: 52, minHeight: 52, paddingHorizontal: 0, boxShadow: '0 3px 10px #0008' }, loading: { position: 'absolute', top: '50%', alignSelf: 'center', backgroundColor: colors.darkCard, padding: spacing.lg, borderRadius: 8 }, empty: { position: 'absolute', top: 74, alignSelf: 'center', backgroundColor: colors.darkCard, borderWidth: 1, borderColor: colors.darkLine, borderRadius: 8, padding: spacing.md, alignItems: 'center', gap: 4, boxShadow: '0 3px 10px #0008' }, overlayText: { color: colors.onSurface }, overlayMuted: { color: colors.gray } });

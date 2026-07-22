@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { AppState } from 'react-native';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { invalidateAvatarCache } from '@/services/avatars';
 import { fetchTeamDrivers } from '@/services/drivers';
 import { supabase } from '@/services/supabase';
 import type { DriverLocation } from '@/types/domain';
@@ -28,7 +29,14 @@ export function useTeamDrivers(teamId?: string) {
         if (!next?.user_id || Date.now() - new Date(next.updated_at).getTime() > 15 * 60_000) return;
         client.setQueryData<Awaited<ReturnType<typeof fetchTeamDrivers>>>(['drivers', teamId], (current) =>
           current?.map((driver) => driver.id === next.user_id ? { ...driver, location: next } : driver));
-      }).subscribe((status) => {
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'profiles', filter: `team_id=eq.${teamId}` }, () => {
+        // Profile changes are less frequent and may include a new private avatar
+        // path. Refetching also creates a fresh signed URL for every client.
+        invalidateAvatarCache();
+        void client.invalidateQueries({ queryKey: ['drivers', teamId] });
+      })
+      .subscribe((status) => {
         if (status === 'SUBSCRIBED') void client.invalidateQueries({ queryKey: ['drivers', teamId] });
       });
     return () => { void supabase.removeChannel(channel); };

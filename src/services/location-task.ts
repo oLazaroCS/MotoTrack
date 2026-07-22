@@ -8,15 +8,28 @@ const PENDING_KEY = 'mototrack:pending-locations';
 const LAST_SENT_KEY = 'mototrack:last-sent-at';
 const FILTERED_LOCATION_KEY = 'mototrack:filtered-location';
 const LAST_UPLOAD_MS_KEY = 'mototrack:last-upload-ms';
+const MAX_LOCATION_ACCURACY_METERS = 100;
+const MAX_PLAUSIBLE_SPEED_MPS = 80;
+const MOVING_UPLOAD_INTERVAL_MS = 1_000;
+const STOPPED_UPLOAD_INTERVAL_MS = 10_000;
+const PROFILE_CACHE_TTL_MS = 5 * 60_000;
+let trackingProfileCache: { userId: string; teamId: string; expiresAt: number } | null = null;
+let stationaryAnchor: QueuedLocation | null = null;
+let speedSamples: QueuedLocation[] = [];
 
 export type QueuedLocation = {
   latitude: number; longitude: number; accuracy: number | null; speed: number | null; heading: number | null; captured_at: string;
 };
 
 function serializeLocation(location: Location.LocationObject): QueuedLocation {
+  const accuracy = location.coords.accuracy;
+  const speed = location.coords.speed;
+  const heading = location.coords.heading;
   return {
     latitude: location.coords.latitude, longitude: location.coords.longitude,
-    accuracy: location.coords.accuracy, speed: location.coords.speed, heading: location.coords.heading,
+    accuracy: accuracy != null && Number.isFinite(accuracy) && accuracy >= 0 ? accuracy : null,
+    speed: speed != null && Number.isFinite(speed) && speed >= 0 && speed <= MAX_PLAUSIBLE_SPEED_MPS ? speed : null,
+    heading: heading != null && Number.isFinite(heading) && heading >= 0 && heading <= 360 ? heading : null,
     captured_at: new Date(location.timestamp).toISOString(),
   };
 }
@@ -36,6 +49,46 @@ function distanceMeters(from: QueuedLocation, to: QueuedLocation) {
   return 6_371_000 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
+function clampSpeed(speed: number) {
+  return Math.min(MAX_PLAUSIBLE_SPEED_MPS, Math.max(0, speed));
+}
+
+function rollingPositionSpeed(current: QueuedLocation) {
+  const candidates = [...speedSamples, current];
+  const currentTime = Date.parse(current.captured_at);
+  const baseline = candidates.find((sample) => currentTime - Date.parse(sample.captured_at) >= 3_000);
+  if (!baseline || accuracyOf(current) > 50 || accuracyOf(baseline) > 50) return null;
+  const elapsedSeconds = (currentTime - Date.parse(baseline.captured_at)) / 1000;
+  const distance = distanceMeters(baseline, current);
+  const uncertainty = Math.max(3, Math.min(12, (accuracyOf(current) + accuracyOf(baseline)) * .2));
+  return clampSpeed(Math.max(0, distance - uncertainty) / elapsedSeconds);
+}
+
+function recordSpeedSample(current: QueuedLocation) {
+  const cutoff = Date.parse(current.captured_at) - 6_000;
+  speedSamples = [...speedSamples, current].filter((sample) => Date.parse(sample.captured_at) >= cutoff).slice(-7);
+}
+
+function estimatedSpeed(current: QueuedLocation, previous: QueuedLocation, positionSpeed: number | null) {
+  const sensorSpeed = current.speed;
+  if (sensorSpeed == null) {
+    if (positionSpeed != null) return positionSpeed;
+    return clampSpeed((previous.speed ?? 0) * .65);
+  }
+  const safeSensorSpeed = clampSpeed(sensorSpeed);
+  if (safeSensorSpeed < .7 && (positionSpeed ?? 0) < 1.2) return 0;
+  if (positionSpeed == null) return safeSensorSpeed;
+
+  // Android's Doppler speed is generally steadier than deriving speed from
+  // coordinates. The coordinate estimate repairs devices that report stale or
+  // missing sensor speed without allowing a GPS jump to create an absurd value.
+  const blended = safeSensorSpeed * .72 + positionSpeed * .28;
+  const previousSpeed = previous.speed;
+  if (previousSpeed == null || !Number.isFinite(previousSpeed)) return blended;
+  const response = Math.abs(blended - previousSpeed) > 8 ? .8 : .65;
+  return clampSpeed(previousSpeed + (blended - previousSpeed) * response);
+}
+
 export async function prepareLocation(location: Location.LocationObject, force = false): Promise<QueuedLocation> {
   const current = serializeLocation(location);
   let previous: QueuedLocation | null = null;
@@ -47,38 +100,63 @@ export async function prepareLocation(location: Location.LocationObject, force =
   }
 
   if (!previous || force) {
+    stationaryAnchor = current;
+    speedSamples = [current];
     await AsyncStorage.setItem(FILTERED_LOCATION_KEY, JSON.stringify(current));
     return current;
   }
 
   const distance = distanceMeters(previous, current);
-  const elapsedSeconds = Math.max(1, (Date.parse(current.captured_at) - Date.parse(previous.captured_at)) / 1000);
+  const elapsedSeconds = Math.max(.5, (Date.parse(current.captured_at) - Date.parse(previous.captured_at)) / 1000);
   const currentAccuracy = accuracyOf(current);
   const previousAccuracy = accuracyOf(previous);
-  const noiseRadius = Math.max(8, Math.min(35, (currentAccuracy + previousAccuracy) * .75));
-  const reportedSpeed = Math.max(0, current.speed ?? 0);
-  const poorReading = currentAccuracy > 100 && previousAccuracy <= 50;
-  const impossibleJump = distance > Math.max(250, elapsedSeconds * 70) && currentAccuracy > 20;
+  const noiseRadius = Math.max(6, Math.min(30, (currentAccuracy + previousAccuracy) * .6));
+  const sensorSpeed = current.speed ?? 0;
+  const poorReading = currentAccuracy > MAX_LOCATION_ACCURACY_METERS && previousAccuracy <= 50;
+  const impossibleJump = distance / elapsedSeconds > MAX_PLAUSIBLE_SPEED_MPS
+    || (distance > Math.max(250, elapsedSeconds * 70) && currentAccuracy > 20);
+  const anchor = stationaryAnchor ?? previous;
+  const anchorDistance = distanceMeters(anchor, current);
+  const anchorElapsedSeconds = Math.max(0, (Date.parse(current.captured_at) - Date.parse(anchor.captured_at)) / 1000);
+  const anchorNoiseRadius = Math.max(3, Math.min(10, (accuracyOf(anchor) + currentAccuracy) * .35));
+  if (anchorDistance > anchorNoiseRadius) stationaryAnchor = current;
+  const positionConfirmedStopped = anchorDistance <= anchorNoiseRadius && anchorElapsedSeconds >= 4;
+  const stationary = (sensorSpeed < .7 && distance <= noiseRadius) || positionConfirmedStopped;
 
   // Keep publishing a heartbeat at the last reliable coordinate. This keeps a
   // stationary rider online without drawing the normal GPS drift on the map.
-  if (poorReading || impossibleJump || (reportedSpeed < 1.2 && distance <= noiseRadius)) {
-    const stable = { ...current, latitude: previous.latitude, longitude: previous.longitude, speed: reportedSpeed < 1.2 ? 0 : current.speed };
+  if (poorReading || impossibleJump || stationary) {
+    const stable = {
+      ...current,
+      latitude: previous.latitude,
+      longitude: previous.longitude,
+      speed: poorReading || impossibleJump ? clampSpeed((previous.speed ?? 0) * .5) : 0,
+      heading: current.heading ?? previous.heading,
+    };
+    if (!poorReading && !impossibleJump) recordSpeedSample(current);
     await AsyncStorage.setItem(FILTERED_LOCATION_KEY, JSON.stringify(stable));
     return stable;
   }
 
-  const alpha = distance > 50 || reportedSpeed > 3 ? .9 : currentAccuracy <= 10 ? .8 : currentAccuracy <= 25 ? .65 : .45;
+  const positionSpeed = rollingPositionSpeed(current);
+  const alpha = distance > 50 || sensorSpeed > 3 ? .92 : currentAccuracy <= 10 ? .82 : currentAccuracy <= 25 ? .68 : .48;
   const filtered = {
     ...current,
     latitude: previous.latitude + (current.latitude - previous.latitude) * alpha,
     longitude: previous.longitude + (current.longitude - previous.longitude) * alpha,
+    speed: estimatedSpeed(current, previous, positionSpeed),
+    heading: current.heading ?? previous.heading,
   };
+  recordSpeedSample(current);
+  if ((filtered.speed ?? 0) >= .7) stationaryAnchor ??= current;
   await AsyncStorage.setItem(FILTERED_LOCATION_KEY, JSON.stringify(filtered));
   return filtered;
 }
 
 export async function resetLocationFilter() {
+  trackingProfileCache = null;
+  stationaryAnchor = null;
+  speedSamples = [];
   await Promise.all([
     AsyncStorage.removeItem(FILTERED_LOCATION_KEY),
     AsyncStorage.removeItem(LAST_UPLOAD_MS_KEY),
@@ -88,6 +166,17 @@ export async function resetLocationFilter() {
 async function queueLocation(location: QueuedLocation) {
   const current = JSON.parse((await AsyncStorage.getItem(PENDING_KEY)) || '[]') as QueuedLocation[];
   await AsyncStorage.setItem(PENDING_KEY, JSON.stringify([...current.slice(-19), location]));
+}
+
+async function activeTeamFor(userId: string) {
+  if (trackingProfileCache?.userId === userId && trackingProfileCache.expiresAt > Date.now()) {
+    return trackingProfileCache.teamId;
+  }
+  const { data: profile, error } = await supabase.from('profiles').select('team_id, account_status').eq('id', userId).single();
+  if (error || profile.account_status !== 'active') throw error || new Error('Conta inativa');
+  if (!profile.team_id) throw new Error('Usuário sem equipe');
+  trackingProfileCache = { userId, teamId: profile.team_id, expiresAt: Date.now() + PROFILE_CACHE_TTL_MS };
+  return profile.team_id;
 }
 
 export async function sendLocation(location: QueuedLocation) {
@@ -103,11 +192,9 @@ export async function sendLocation(location: QueuedLocation) {
   }
   const user = activeSession?.user;
   if (!user) throw new Error('Sessão não encontrada');
-  const { data: profile, error: profileError } = await supabase.from('profiles').select('team_id, account_status').eq('id', user.id).single();
-  if (profileError || profile.account_status !== 'active') throw profileError || new Error('Conta inativa');
-  if (!profile.team_id) throw new Error('Usuário sem equipe');
+  const teamId = await activeTeamFor(user.id);
   const { error } = await supabase.from('driver_locations').upsert({
-    user_id: user.id, team_id: profile.team_id, ...location, is_online: true, updated_at: location.captured_at,
+    user_id: user.id, team_id: teamId, ...location, is_online: true, updated_at: location.captured_at,
   }, { onConflict: 'user_id' });
   if (error) throw error;
   await Promise.all([
@@ -130,11 +217,10 @@ TaskManager.defineTask<{ locations: Location.LocationObject[] }>(LOCATION_TASK, 
   if (error || !data?.locations?.length) return;
   const latest = data.locations[data.locations.length - 1];
   if (!latest) return;
-  const raw = serializeLocation(latest);
-  const lastSent = Number(await AsyncStorage.getItem(LAST_UPLOAD_MS_KEY)) || 0;
-  const interval = (raw.speed ?? 0) > 0.5 ? 10_000 : 30_000;
-  if (Date.now() - lastSent < interval) return;
   const value = await prepareLocation(latest);
+  const lastSent = Number(await AsyncStorage.getItem(LAST_UPLOAD_MS_KEY)) || 0;
+  const interval = (value.speed ?? 0) >= .7 ? MOVING_UPLOAD_INTERVAL_MS : STOPPED_UPLOAD_INTERVAL_MS;
+  if (Date.now() - lastSent < interval) return;
   try {
     await sendLocation(value);
     await AsyncStorage.setItem(LAST_UPLOAD_MS_KEY, String(Date.now()));

@@ -9,6 +9,7 @@
   [![React Native](https://img.shields.io/badge/React_Native-0.86-20232A?style=for-the-badge&logo=react)](https://reactnative.dev/)
   [![TypeScript](https://img.shields.io/badge/TypeScript-6-3178C6?style=for-the-badge&logo=typescript)](https://www.typescriptlang.org/)
   [![Supabase](https://img.shields.io/badge/Supabase-Realtime-3FCF8E?style=for-the-badge&logo=supabase&logoColor=white)](https://supabase.com/)
+  [![Version](https://img.shields.io/badge/Version-1.1.0-FFC107?style=for-the-badge&logo=semanticrelease&logoColor=black)](#versão-e-builds)
   [![Private](https://img.shields.io/badge/Repository-Private-FFC107?style=for-the-badge&logo=github&logoColor=black)](#licença-e-uso)
 </div>
 
@@ -24,19 +25,22 @@ O projeto foi construído para Android, iOS e web com a mesma base em React Nati
 
 ## Destaques
 
-- Rastreamento em primeiro e segundo plano no aplicativo nativo.
+- Rastreamento em primeiro e segundo plano no aplicativo nativo, com captura de até 1 segundo durante movimento.
 - Atualização por Supabase Realtime com consulta de recuperação a cada 15 segundos.
 - Mapa vetorial MapLibre com o estilo OSM Liberty do OpenFreeMap, sem chave paga de mapas.
 - Exibição exclusiva de membros online e com posição recente.
 - Marcadores com foto, apelido e estado da posição.
-- Filtro de ruído do GPS para reduzir deslocamentos laterais quando o aparelho está parado.
+- Filtro de ruído, precisão e saltos do GPS para reduzir deslocamentos laterais quando o aparelho está parado.
+- Velocidade em km/h combinando o sensor Doppler do aparelho com uma janela móvel de distância/tempo.
 - Fila local para reenviar posições após perda de conexão.
 - ID público único gerado automaticamente no formato `ABC12345`, pesquisável em equipe e administração.
 - Cadastro com limites, normalização e validação também no servidor e no banco.
 - Temas claro e escuro persistidos no aparelho.
-- Administração master e administração isolada por equipe.
+- Administração master com usuários agrupados por equipe e busca interna por nome, apelido, e-mail ou ID.
+- Administração de grupo isolada por equipe, sem acesso administrativo a outros grupos.
 - Aprovação de novos integrantes antes do acesso aos dados do grupo.
-- Fotos de perfil e logos armazenados em buckets privados com URLs temporárias.
+- Fotos de perfil e logos armazenados em buckets privados com URLs temporárias e sincronização de alterações.
+- Formulários móveis preparados para teclado, rolagem automática e preenchimento de e-mail, telefone e senha.
 
 ## Perfis e permissões
 
@@ -64,9 +68,23 @@ flowchart LR
     J --> K[Remove marcador do mapa]
 ```
 
-No Android/iOS, a coleta usa `Accuracy.BestForNavigation`, intervalo-base de 10 segundos e deslocamento mínimo de 5 metros. Leituras imprecisas ou saltos improváveis são descartados; quando parado, o envio é reduzido para aproximadamente 30 segundos. O mapa considera online apenas uma posição atualizada nos últimos dois minutos.
+No Android/iOS, a coleta usa `Accuracy.BestForNavigation`, intervalo solicitado de 1 segundo e deslocamento mínimo de 1 metro durante movimento. O filtro considera precisão horizontal, ruído acumulado e saltos fisicamente improváveis. A velocidade prioriza o sensor do GPS quando válido e usa uma janela móvel de aproximadamente 3–6 segundos como conferência e alternativa. Depois de confirmar que o aparelho permaneceu no mesmo raio, o valor volta para `0 km/h`; quando parado, o envio é reduzido para aproximadamente 10 segundos.
+
+O intervalo é uma solicitação ao sistema operacional, não uma garantia absoluta: Android e iOS podem reduzir a frequência conforme sinal, economia de bateria, fabricante ou execução em segundo plano. O mapa recebe as posições aceitas pelo Supabase Realtime e considera online apenas quem compartilhou uma posição recente.
 
 Na web, a geolocalização exige HTTPS ou `localhost` e funciona enquanto a página estiver aberta. Se a permissão continuar concedida, o compartilhamento é retomado após recarregar a página para usuários ainda marcados como online.
+
+## Administração por equipe
+
+O painel master foi desenhado para continuar utilizável quando a plataforma tiver muitas equipes e usuários:
+
+1. Cada equipe aparece como um grupo independente, com código, tag, administradores e total de integrantes.
+2. O grupo pode ser expandido somente quando o master precisar consultar seus membros.
+3. A busca acontece dentro da equipe selecionada e aceita nome, apelido, e-mail ou o ID público `ABC12345`.
+4. Cada resultado mantém as ações de edição e exclusão, além de função e estado da conta.
+5. Contas sem vínculo aparecem em uma seção separada de pendências.
+
+O administrador de uma equipe continua limitado ao próprio grupo. Somente o master visualiza e administra a estrutura completa da plataforma.
 
 ## Arquitetura
 
@@ -190,6 +208,19 @@ npx eas-cli build --profile production --platform ios
 
 No Android 11 ou superior, o sistema pode abrir uma segunda tela para a permissão **Permitir o tempo todo**. Sem essa autorização, o sistema operacional pode interromper atualizações em segundo plano.
 
+## Versão e builds
+
+A versão atual é **1.1.0**:
+
+| Campo | Valor | Finalidade |
+| --- | --- | --- |
+| `expo.version` | `1.1.0` | Versão visível ao usuário |
+| `package.json` | `1.1.0` | Versão do projeto JavaScript |
+| Android `versionCode` | `2` | Identificador crescente do pacote Android |
+| iOS `buildNumber` | `2` | Identificador crescente do pacote iOS |
+
+A tela **Configurações** lê `expo.version` automaticamente; portanto, não existe mais um texto `1.0.0` fixo na interface. Em novas entregas, altere a versão semântica em `app.json` e `package.json`. Os builds de produção usam `autoIncrement` no EAS para manter o número interno crescente.
+
 ## Comandos de qualidade
 
 | Comando | Finalidade |
@@ -208,6 +239,8 @@ No Android 11 ou superior, o sistema pode abrir uma segunda tela para a permiss�
 - Nome, apelido, telefone, senha e códigos possuem limites no cliente, servidor e Postgres.
 - Telefones são armazenados apenas com dígitos e validados entre 10 e 15 caracteres.
 - Buckets de fotos e logos não dependem de URLs públicas permanentes.
+- A leitura de avatares é autorizada apenas para o próprio usuário, master ou membros ativos da mesma equipe.
+- O banco rejeita velocidades negativas ou acima do limite de segurança de `80 m/s`.
 - O mapa esconde integrantes offline e posições vencidas.
 
 Antes de disponibilizar o produto comercialmente, revise a política de privacidade com orientação jurídica, defina o período de retenção e documente uma base legal adequada para o tratamento de localização.
@@ -230,6 +263,18 @@ Abra o site por HTTPS ou `localhost`, libere a localização no ícone ao lado d
 <summary><strong>O rastreamento para quando o Android fica em segundo plano</strong></summary>
 
 Use um Development Build/APK, conceda **Permitir o tempo todo** e revise as otimizações de bateria do fabricante. O Expo Go não cobre integralmente a tarefa nativa usada pelo MotoTrack.
+</details>
+
+<details>
+<summary><strong>A velocidade não zera ou apresenta um valor impossível</strong></summary>
+
+Instale a versão mais recente do APK e desligue/ligue o compartilhamento uma vez. A versão 1.1.0 atualiza automaticamente a configuração da tarefa existente, rejeita leituras inválidas, confirma a parada por deslocamento e mantém uma constraint equivalente no banco.
+</details>
+
+<details>
+<summary><strong>O teclado cobre o campo de senha no Android</strong></summary>
+
+Use um APK gerado com `softwareKeyboardLayoutMode: resize`. A tela de login também usa ajuste de altura e rola automaticamente até a senha quando o campo recebe foco.
 </details>
 
 <details>

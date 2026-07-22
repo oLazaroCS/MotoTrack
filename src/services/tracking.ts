@@ -8,6 +8,22 @@ let webLocationWatchId: number | null = null;
 let lastWebUpload = 0;
 let webTrackingActive = false;
 let pendingWebUpload: Promise<unknown> | null = null;
+const WEB_MOVING_UPLOAD_INTERVAL_MS = 1_000;
+const WEB_STOPPED_UPLOAD_INTERVAL_MS = 10_000;
+const NATIVE_TRACKING_OPTIONS: Location.LocationTaskOptions = {
+  accuracy: Location.Accuracy.BestForNavigation,
+  timeInterval: 1_000,
+  distanceInterval: 1,
+  deferredUpdatesInterval: 1_000,
+  pausesUpdatesAutomatically: false,
+  activityType: Location.ActivityType.AutomotiveNavigation,
+  showsBackgroundLocationIndicator: true,
+  foregroundService: {
+    notificationTitle: 'MotoTrack online',
+    notificationBody: 'Sua localização está sendo compartilhada com a equipe.',
+    notificationColor: '#F6A800',
+  },
+};
 
 type WebPermissionStatus = 'undetermined' | 'granted' | 'denied';
 
@@ -70,6 +86,11 @@ export async function isTrackingRunning() {
   }
 }
 
+export async function refreshTrackingConfiguration() {
+  if (Platform.OS === 'web' || !(await Location.hasStartedLocationUpdatesAsync(LOCATION_TASK))) return;
+  await Location.startLocationUpdatesAsync(LOCATION_TASK, NATIVE_TRACKING_OPTIONS);
+}
+
 export async function startTracking() {
   if (Platform.OS === 'web') {
     if (!navigator.geolocation) throw new Error('Este navegador não oferece acesso à localização');
@@ -81,9 +102,14 @@ export async function startTracking() {
     if (webLocationWatchId == null) {
       webLocationWatchId = navigator.geolocation.watchPosition(
         (position) => {
-          if (!webTrackingActive || Date.now() - lastWebUpload < 10_000) return;
-          lastWebUpload = Date.now();
-          const upload = prepareLocation(webPositionToLocation(position)).then(sendLocation).catch(() => undefined);
+          if (!webTrackingActive || pendingWebUpload) return;
+          const upload = prepareLocation(webPositionToLocation(position)).then(async (location) => {
+            const interval = (location.speed ?? 0) >= .7 ? WEB_MOVING_UPLOAD_INTERVAL_MS : WEB_STOPPED_UPLOAD_INTERVAL_MS;
+            if (Date.now() - lastWebUpload < interval) return undefined;
+            const syncedAt = await sendLocation(location);
+            lastWebUpload = Date.now();
+            return syncedAt;
+          }).catch(() => undefined);
           pendingWebUpload = upload;
           void upload.finally(() => { if (pendingWebUpload === upload) pendingWebUpload = null; });
         },
@@ -120,22 +146,7 @@ export async function startTracking() {
   const current = await getPreciseLocation();
   const lastSync = await sendLocation(await prepareLocation(current, true));
 
-  if (!(await Location.hasStartedLocationUpdatesAsync(LOCATION_TASK))) {
-    await Location.startLocationUpdatesAsync(LOCATION_TASK, {
-      accuracy: Location.Accuracy.BestForNavigation,
-      timeInterval: 10_000,
-      distanceInterval: 5,
-      deferredUpdatesInterval: 10_000,
-      pausesUpdatesAutomatically: false,
-      activityType: Location.ActivityType.AutomotiveNavigation,
-      showsBackgroundLocationIndicator: true,
-      foregroundService: {
-        notificationTitle: 'MotoTrack online',
-        notificationBody: 'Sua localização está sendo compartilhada com a equipe.',
-        notificationColor: '#F6A800',
-      },
-    });
-  }
+  await Location.startLocationUpdatesAsync(LOCATION_TASK, NATIVE_TRACKING_OPTIONS);
   return lastSync;
 }
 

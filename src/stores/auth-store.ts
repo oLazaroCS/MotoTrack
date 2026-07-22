@@ -2,7 +2,7 @@ import type { Session } from '@supabase/supabase-js';
 import { create } from 'zustand';
 import type { Profile } from '@/types/domain';
 import { supabase } from '@/services/supabase';
-import { signedAvatarUrl } from '@/services/drivers';
+import { signedAvatarUrl } from '@/services/avatars';
 
 interface AuthState {
   session: Session | null;

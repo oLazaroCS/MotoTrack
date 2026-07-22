@@ -8,7 +8,7 @@ import { Notice } from '@/components/notice';
 import { AppText, Button, Card, Screen, StatusDot } from '@/components/ui';
 import { colors, radius, spacing } from '@/constants/theme';
 import { useTeamDrivers } from '@/hooks/use-team-drivers';
-import { checkLocationReadiness, isTrackingRunning, startTracking, stopTracking } from '@/services/tracking';
+import { checkLocationReadiness, isTrackingRunning, refreshTrackingConfiguration, startTracking, stopTracking } from '@/services/tracking';
 import { useAuthStore } from '@/stores/auth-store';
 import { useTrackingStore } from '@/stores/tracking-store';
 import { isStale, relativeTime } from '@/utils/format';
@@ -33,6 +33,9 @@ export default function HomeScreen() {
       const readiness = await checkLocationReadiness();
       let taskRunning = await isTrackingRunning();
       let resumedSync: string | null = null;
+      if (Platform.OS !== 'web' && taskRunning) {
+        try { await refreshTrackingConfiguration(); } catch { taskRunning = false; }
+      }
       if (Platform.OS === 'web' && own?.is_online && readiness.permission === 'granted' && !taskRunning) {
         try {
           resumedSync = await startTracking();

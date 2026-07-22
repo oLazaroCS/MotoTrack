@@ -1,9 +1,7 @@
 import type { DriverLocation, DriverWithLocation, Profile, Team } from '@/types/domain';
 import { signedTeamLogoUrl } from './admin';
+import { invalidateAvatarCache, signedAvatarUrl } from './avatars';
 import { supabase } from './supabase';
-
-const AVATAR_URL_TTL_MS = 50 * 60 * 1000;
-const avatarUrlCache = new Map<string, { url: string; expiresAt: number }>();
 
 export async function fetchTeamDrivers(teamId: string): Promise<DriverWithLocation[]> {
   const [{ data: profiles, error: profileError }, { data: locations, error: locationError }] = await Promise.all([
@@ -35,18 +33,6 @@ export async function uploadAvatar(userId: string, uri: string) {
   const path = `${userId}/avatar.${extension}`;
   const { error } = await supabase.storage.from('avatars').upload(path, buffer, { upsert: true, contentType: response.headers.get('content-type') || 'image/jpeg' });
   if (error) throw error;
-  avatarUrlCache.delete(path);
+  invalidateAvatarCache(path);
   return path;
-}
-
-export async function signedAvatarUrl(path: string | null) {
-  if (!path || path.startsWith('http')) return path;
-  const cached = avatarUrlCache.get(path);
-  if (cached && cached.expiresAt > Date.now()) return cached.url;
-  const { data } = await supabase.storage.from('avatars').createSignedUrl(path, 60 * 60);
-  if (!data?.signedUrl) return null;
-  const separator = data.signedUrl.includes('?') ? '&' : '?';
-  const url = `${data.signedUrl}${separator}v=${Date.now()}`;
-  avatarUrlCache.set(path, { url, expiresAt: Date.now() + AVATAR_URL_TTL_MS });
-  return url;
 }

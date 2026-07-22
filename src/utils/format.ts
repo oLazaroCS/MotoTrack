@@ -18,3 +18,21 @@ export function distanceKm(a?: { latitude: number; longitude: number } | null, b
   const x = Math.sin(dLat / 2) ** 2 + Math.cos(a.latitude * Math.PI / 180) * Math.cos(b.latitude * Math.PI / 180) * Math.sin(dLon / 2) ** 2;
   return r * 2 * Math.atan2(Math.sqrt(x), Math.sqrt(1 - x));
 }
+
+export function formatDistance(distanceKmValue: number) {
+  const safeDistance = Math.max(0, distanceKmValue);
+  if (safeDistance < 1) return `${Math.round(safeDistance * 1000)} m`;
+  return `${safeDistance.toLocaleString('pt-BR', {
+    minimumFractionDigits: safeDistance < 100 ? 2 : 1,
+    maximumFractionDigits: safeDistance < 100 ? 2 : 1,
+  })} km`;
+}
+
+export function formatSpeed(speedMetersPerSecond?: number | null) {
+  if (speedMetersPerSecond == null || !Number.isFinite(speedMetersPerSecond) || speedMetersPerSecond < 0 || speedMetersPerSecond > 80) return null;
+  const speedKmH = Math.max(0, speedMetersPerSecond * 3.6);
+  return `${speedKmH.toLocaleString('pt-BR', {
+    minimumFractionDigits: speedKmH > 0 && speedKmH < 100 ? 1 : 0,
+    maximumFractionDigits: speedKmH < 100 ? 1 : 0,
+  })} km/h`;
+}

@@ -7,7 +7,7 @@ import { AppText, StatusDot } from './ui';
 import { colors, spacing } from '@/constants/theme';
 import { useVelocityTheme } from '@/hooks/use-velocity-theme';
 import type { DriverWithLocation } from '@/types/domain';
-import { isStale, relativeTime } from '@/utils/format';
+import { formatDistance, formatSpeed, isStale, relativeTime } from '@/utils/format';
 
 type DriverSheetProps = {
   driver: DriverWithLocation;
@@ -19,6 +19,7 @@ type DriverSheetProps = {
 export function DriverSheet({ driver, distance, onCenter, onClose }: DriverSheetProps) {
   const palette = useVelocityTheme();
   const location = driver.location!;
+  const speed = formatSpeed(location.speed);
   const stale = isStale(location.updated_at);
   const phone = driver.phone?.replace(/\D/g, '') || '';
   const whatsAppPhone = phone.startsWith('55') ? phone : `55${phone}`;
@@ -37,7 +38,7 @@ export function DriverSheet({ driver, distance, onCenter, onClose }: DriverSheet
         <AppText size={18} weight="800">{driver.name}</AppText>
         <AppText tone="muted" size={12}>@{driver.nickname || driver.name.split(' ')[0]} · ID {driver.driver_code || 'não definido'}</AppText>
         <View style={styles.row}><StatusDot online stale={stale}/><AppText size={13} tone={stale ? 'danger' : 'success'}>{stale ? `Atualizada ${relativeTime(location.updated_at).toLowerCase()}` : 'Online agora'}</AppText></View>
-        <AppText tone="muted" size={12}>{location.speed != null ? `${Math.max(0, location.speed * 3.6).toFixed(0)} km/h` : 'Velocidade indisponível'}{distance != null ? ` · ${distance < 1 ? `${Math.round(distance * 1000)} m` : `${distance.toFixed(1)} km`}` : ''}</AppText>
+        <AppText tone="muted" size={12}>{speed ?? 'Velocidade indisponível'}{distance != null ? ` · ${formatDistance(distance)}` : ''}</AppText>
         <AppText tone="muted" size={12}>{driver.phone || 'Telefone não cadastrado'}</AppText>
       </View>
     </Pressable>
