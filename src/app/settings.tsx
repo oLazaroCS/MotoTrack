@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import Constants from 'expo-constants';
 import { router } from 'expo-router';
 import { Bell, Check, ChevronRight, LockKeyhole, Moon, ShieldCheck, Sun } from 'lucide-react-native';
 import { Alert, Pressable, StyleSheet, Switch, View } from 'react-native';
@@ -11,6 +12,7 @@ import { useThemeStore, type ThemeMode } from '@/stores/theme-store';
 import { isStrongPassword, LIMITS, PASSWORD_REQUIREMENTS } from '@/validations/auth';
 
 export default function SettingsScreen() {
+  const appVersion = Constants.expoConfig?.version ?? '1.1.0';
   const [notifications, setNotifications] = useState(true);
   const [password, setPassword] = useState('');
   const [saving, setSaving] = useState(false);
@@ -48,7 +50,7 @@ export default function SettingsScreen() {
     <Card style={styles.group}><View style={styles.title}><LockKeyhole size={21} color={colors.amber}/><AppText size={18} weight="600">Alterar senha</AppText></View><Field label="Nova senha" placeholder="8 ou mais caracteres" maxLength={LIMITS.password} secureTextEntry value={password} onChangeText={setPassword}/><Button title="Atualizar senha" onPress={updatePassword} loading={saving}/></Card>
     <SectionLabel>GERAL</SectionLabel>
     <SettingsRow Icon={ShieldCheck} title="Política de privacidade" subtitle="Dados, localização e retenção" trailing={<ChevronRight size={19} color={colors.gray}/>} onPress={() => router.push('/privacy')}/>
-    <AppText tone="muted" size={12} style={styles.version}>MotoTrack 1.0.0</AppText>
+    <AppText tone="muted" size={12} style={styles.version}>MotoTrack {appVersion}</AppText>
   </Screen>;
 }
 

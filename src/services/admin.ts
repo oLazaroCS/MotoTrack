@@ -1,5 +1,6 @@
 import type { AccountStatus, Profile, Team, UserRole } from '@/types/domain';
 import { supabase } from './supabase';
+import { signedAvatarUrl } from './avatars';
 
 export type CreateManagedUser = {
   name: string;
@@ -46,12 +47,6 @@ export async function fetchManagedUsers(): Promise<Profile[]> {
   const { data, error } = await supabase.from('profiles').select('*').order('name');
   if (error) throw error;
   return Promise.all((data as Profile[]).map(async (profile) => ({ ...profile, avatar_url: await signedAvatarUrl(profile.avatar_url) })));
-}
-
-async function signedAvatarUrl(path: string | null) {
-  if (!path || path.startsWith('http')) return path;
-  const { data } = await supabase.storage.from('avatars').createSignedUrl(path, 60 * 60);
-  return data?.signedUrl ?? null;
 }
 
 export async function uploadTeamLogo(teamId: string, uri: string) {
