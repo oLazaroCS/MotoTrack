@@ -1,13 +1,14 @@
 import { cloneElement, isValidElement, useState, type PropsWithChildren, type ReactElement, type ReactNode, type RefObject } from 'react';
 import { ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View, type PressableProps, type TextInputProps, type TextProps, type ViewStyle } from 'react-native';
 import { useTheme } from 'expo-router';
+import { Eye, EyeOff } from 'lucide-react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { colors, fonts, radius, spacing } from '@/constants/theme';
 
 export function Screen({ children, scroll = true, style, scrollRef }: PropsWithChildren<{ scroll?: boolean; style?: ViewStyle; scrollRef?: RefObject<ScrollView | null> }>) {
   const theme = useTheme();
   const content = <View style={[styles.content, style]}>{children}</View>;
-  return <SafeAreaView style={[styles.safe, { backgroundColor: theme.colors.background }]} edges={['top']}><KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.keyboard}>{scroll ? <ScrollView ref={scrollRef} style={styles.scrollView} contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled" keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'} automaticallyAdjustKeyboardInsets contentInsetAdjustmentBehavior="automatic">{content}</ScrollView> : content}</KeyboardAvoidingView></SafeAreaView>;
+  return <SafeAreaView style={[styles.safe, { backgroundColor: theme.colors.background }]} edges={['top', 'bottom']}><KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.keyboard}>{scroll ? <ScrollView ref={scrollRef} style={styles.scrollView} contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled" keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'} automaticallyAdjustKeyboardInsets contentInsetAdjustmentBehavior="automatic">{content}</ScrollView> : content}</KeyboardAvoidingView></SafeAreaView>;
 }
 
 export function AppText({ children, tone = 'default', size = 15, weight = '400', style, ...props }: PropsWithChildren<{ tone?: 'default' | 'muted' | 'danger' | 'success'; size?: number; weight?: '400' | '500' | '600' | '700' | '800' } & Omit<TextProps, 'children'>>) {
@@ -29,9 +30,11 @@ export function Button({ title, icon, variant = 'primary', loading, disabled, st
 export function Field({ label, error, ...props }: TextInputProps & { label: string; error?: string }) {
   const theme = useTheme();
   const [focused, setFocused] = useState(false);
+  const [passwordVisible, setPasswordVisible] = useState(false);
   const { onFocus, onBlur, ...inputProps } = props;
-  const semanticProps = semanticInputProps(label, Boolean(props.secureTextEntry));
-  return <View style={styles.fieldWrap}><AppText weight="600" size={12} style={styles.fieldLabel}>{label.toUpperCase()}</AppText><TextInput {...semanticProps} placeholderTextColor={colors.gray} style={[styles.field, { color: theme.colors.text, backgroundColor: theme.colors.card, borderColor: error ? colors.red : focused ? colors.amber : theme.colors.border }]} onFocus={(event) => { setFocused(true); onFocus?.(event); }} onBlur={(event) => { setFocused(false); onBlur?.(event); }} {...inputProps}/>{error ? <AppText tone="danger" size={12}>{error}</AppText> : null}</View>;
+  const isPassword = Boolean(props.secureTextEntry);
+  const semanticProps = semanticInputProps(label, isPassword);
+  return <View style={styles.fieldWrap}><AppText weight="600" size={12} style={styles.fieldLabel}>{label.toUpperCase()}</AppText><View style={styles.inputWrap}><TextInput {...semanticProps} placeholderTextColor={colors.gray} style={[styles.field, isPassword && styles.passwordField, { color: theme.colors.text, backgroundColor: theme.colors.card, borderColor: error ? colors.red : focused ? colors.amber : theme.colors.border }]} onFocus={(event) => { setFocused(true); onFocus?.(event); }} onBlur={(event) => { setFocused(false); onBlur?.(event); }} {...inputProps} secureTextEntry={isPassword && !passwordVisible}/>{isPassword ? <Pressable accessibilityLabel={passwordVisible ? 'Ocultar senha' : 'Mostrar senha'} accessibilityRole="button" hitSlop={8} onPress={() => setPasswordVisible((visible) => !visible)} style={styles.passwordToggle}>{passwordVisible ? <EyeOff size={21} color={focused ? colors.amber : colors.gray}/> : <Eye size={21} color={focused ? colors.amber : colors.gray}/>}</Pressable> : null}</View>{error ? <AppText tone="danger" size={12}>{error}</AppText> : null}</View>;
 }
 
 function semanticInputProps(label: string, secure: boolean): Partial<TextInputProps> {
@@ -59,6 +62,6 @@ const styles = StyleSheet.create({
   safe: { flex: 1 }, keyboard: { flex: 1 }, scrollView: { flex: 1 }, scroll: { flexGrow: 1 }, content: { flex: 1, width: '100%', maxWidth: 760, alignSelf: 'center', padding: spacing.md, gap: spacing.md },
   button: { minHeight: 52, borderRadius: radius.md, borderWidth: 1, paddingHorizontal: spacing.lg, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.sm },
   buttonText: { fontSize: 15, fontFamily: fonts.bold, letterSpacing: 0 },
-  fieldWrap: { gap: 6 }, fieldLabel: { color: colors.gray, letterSpacing: .65 }, field: { minHeight: 52, borderWidth: 1, borderRadius: radius.md, paddingHorizontal: spacing.md, fontSize: 16, fontFamily: fonts.regular, letterSpacing: 0 },
+  fieldWrap: { gap: 6 }, fieldLabel: { color: colors.gray, letterSpacing: .65 }, inputWrap: { position: 'relative' }, field: { width: '100%', minHeight: 52, borderWidth: 1, borderRadius: radius.md, paddingHorizontal: spacing.md, fontSize: 16, fontFamily: fonts.regular, letterSpacing: 0 }, passwordField: { paddingRight: 52 }, passwordToggle: { position: 'absolute', right: 4, top: 4, bottom: 4, width: 44, alignItems: 'center', justifyContent: 'center' },
   card: { borderWidth: 1, borderRadius: radius.lg, padding: spacing.md }, dot: { width: 10, height: 10, borderRadius: 5 },
 });

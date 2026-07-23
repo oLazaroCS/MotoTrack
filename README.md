@@ -9,7 +9,7 @@
   [![React Native](https://img.shields.io/badge/React_Native-0.86-20232A?style=for-the-badge&logo=react)](https://reactnative.dev/)
   [![TypeScript](https://img.shields.io/badge/TypeScript-6-3178C6?style=for-the-badge&logo=typescript)](https://www.typescriptlang.org/)
   [![Supabase](https://img.shields.io/badge/Supabase-Realtime-3FCF8E?style=for-the-badge&logo=supabase&logoColor=white)](https://supabase.com/)
-  [![Version](https://img.shields.io/badge/Version-1.1.0-FFC107?style=for-the-badge&logo=semanticrelease&logoColor=black)](#versão-e-builds)
+  [![Version](https://img.shields.io/badge/Version-1.2.0-FFC107?style=for-the-badge&logo=semanticrelease&logoColor=black)](#versão-e-builds)
   [![Private](https://img.shields.io/badge/Repository-Private-FFC107?style=for-the-badge&logo=github&logoColor=black)](#licença-e-uso)
 </div>
 
@@ -38,9 +38,12 @@ O projeto foi construído para Android, iOS e web com a mesma base em React Nati
 - Temas claro e escuro persistidos no aparelho.
 - Administração master com usuários agrupados por equipe e busca interna por nome, apelido, e-mail ou ID.
 - Administração de grupo isolada por equipe, sem acesso administrativo a outros grupos.
+- Um mesmo integrante pode participar de várias equipes, com função e aprovação independentes em cada grupo.
+- Códigos de equipe imutáveis e gerados automaticamente no formato `EQP-XXXXXXXXXX`.
+- Modo **Acompanhar** mantém a câmera centralizada no integrante até o usuário tocar ou mover o mapa.
 - Aprovação de novos integrantes antes do acesso aos dados do grupo.
-- Fotos de perfil e logos armazenados em buckets privados com URLs temporárias e sincronização de alterações.
-- Formulários móveis preparados para teclado, rolagem automática e preenchimento de e-mail, telefone e senha.
+- Fotos de perfil e logos comprimidos antes do upload, armazenados em buckets privados e removidos com suas contas/equipes.
+- Formulários móveis preparados para teclado, áreas seguras, preenchimento automático e botão para mostrar/ocultar senhas.
 
 ## Perfis e permissões
 
@@ -48,7 +51,7 @@ O projeto foi construído para Android, iOS e web com a mesma base em React Nati
 | --- | --- | --- |
 | Integrante | Própria equipe | Ficar online/offline, ver equipe, mapa e perfis, editar dados pessoais |
 | Admin da equipe | Própria equipe | Aprovar, recusar, expulsar e promover administradores do mesmo grupo |
-| Admin master | Plataforma | Criar e editar equipes, usuários, códigos, logos e administradores responsáveis |
+| Admin master | Plataforma | Criar e editar equipes, usuários, logos e administradores responsáveis; os códigos são automáticos |
 
 As políticas RLS continuam valendo mesmo que alguém tente acessar o Supabase fora da interface. Usuários pendentes ficam isolados até a aprovação; administradores de equipe não podem administrar outros grupos; a conta master é protegida contra alteração pelas rotas comuns.
 
@@ -210,14 +213,14 @@ No Android 11 ou superior, o sistema pode abrir uma segunda tela para a permiss�
 
 ## Versão e builds
 
-A versão atual é **1.1.0**:
+A versão atual é **1.2.0**:
 
 | Campo | Valor | Finalidade |
 | --- | --- | --- |
-| `expo.version` | `1.1.0` | Versão visível ao usuário |
-| `package.json` | `1.1.0` | Versão do projeto JavaScript |
-| Android `versionCode` | `2` | Identificador crescente do pacote Android |
-| iOS `buildNumber` | `2` | Identificador crescente do pacote iOS |
+| `expo.version` | `1.2.0` | Versão visível ao usuário |
+| `package.json` | `1.2.0` | Versão do projeto JavaScript |
+| Android `versionCode` | `3` | Identificador crescente do pacote Android |
+| iOS `buildNumber` | `3` | Identificador crescente do pacote iOS |
 
 A tela **Configurações** lê `expo.version` automaticamente; portanto, não existe mais um texto `1.0.0` fixo na interface. Em novas entregas, altere a versão semântica em `app.json` e `package.json`. Os builds de produção usam `autoIncrement` no EAS para manter o número interno crescente.
 
@@ -239,7 +242,7 @@ A tela **Configurações** lê `expo.version` automaticamente; portanto, não ex
 - Nome, apelido, telefone, senha e códigos possuem limites no cliente, servidor e Postgres.
 - Telefones são armazenados apenas com dígitos e validados entre 10 e 15 caracteres.
 - Buckets de fotos e logos não dependem de URLs públicas permanentes.
-- A leitura de avatares é autorizada apenas para o próprio usuário, master ou membros ativos da mesma equipe.
+- A leitura de avatares é autorizada apenas para o próprio usuário, master ou membros que compartilham uma equipe ativa.
 - O banco rejeita velocidades negativas ou acima do limite de segurança de `80 m/s`.
 - O mapa esconde integrantes offline e posições vencidas.
 
@@ -268,7 +271,7 @@ Use um Development Build/APK, conceda **Permitir o tempo todo** e revise as otim
 <details>
 <summary><strong>A velocidade não zera ou apresenta um valor impossível</strong></summary>
 
-Instale a versão mais recente do APK e desligue/ligue o compartilhamento uma vez. A versão 1.1.0 atualiza automaticamente a configuração da tarefa existente, rejeita leituras inválidas, confirma a parada por deslocamento e mantém uma constraint equivalente no banco.
+Instale a versão mais recente do APK e desligue/ligue o compartilhamento uma vez. A versão 1.2.0 mantém a configuração de alta precisão, rejeita leituras inválidas, confirma a parada por deslocamento e mantém uma constraint equivalente no banco.
 </details>
 
 <details>

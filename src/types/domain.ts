@@ -26,10 +26,19 @@ export interface Profile {
   updated_at: string;
 }
 
+export interface TeamMembership {
+  team_id: string;
+  user_id: string;
+  role: UserRole;
+  status: AccountStatus;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface DriverLocation {
   id: string;
   user_id: string;
-  team_id: string;
+  team_id: string | null;
   latitude: number;
   longitude: number;
   accuracy: number | null;

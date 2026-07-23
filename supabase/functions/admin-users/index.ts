@@ -14,6 +14,24 @@ const validPhone = (value: unknown) => /^\d{10,15}$/.test(normalizePhone(value))
 const validPassword = (value: unknown) => { const password = String(value ?? ''); return password.length >= 8 && password.length <= limits.password && /[a-z]/.test(password) && /[A-Z]/.test(password) && /\d/.test(password) && /[^A-Za-z0-9]/.test(password); };
 const validName = (value: unknown) => { const name = textValue(value); return name.length >= 3 && name.length <= limits.name; };
 const validNickname = (value: unknown) => { const nickname = textValue(value); return nickname.length >= 2 && nickname.length <= limits.nickname; };
+const uniqueIds = (value: unknown) => [...new Set(Array.isArray(value) ? value.map(textValue).filter(Boolean) : [])];
+
+async function removeStorageFolder(admin: ReturnType<typeof createClient>, bucket: string, folder: string) {
+  let offset = 0;
+  const paths: string[] = [];
+  while (true) {
+    const { data, error } = await admin.storage.from(bucket).list(folder, { limit: 100, offset });
+    if (error) throw error;
+    const files = (data ?? []).filter((item) => item.id).map((item) => `${folder}/${item.name}`);
+    paths.push(...files);
+    if ((data?.length ?? 0) < 100) break;
+    offset += 100;
+  }
+  if (paths.length) {
+    const { error } = await admin.storage.from(bucket).remove(paths);
+    if (error) throw error;
+  }
+}
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: cors });
@@ -60,6 +78,7 @@ Deno.serve(async (req) => {
       if (listError) throw listError;
       for (const oldUser of users.users) {
         if (oldUser.id !== created.user.id) {
+          await removeStorageFolder(admin, 'avatars', oldUser.id);
           const { error } = await admin.auth.admin.deleteUser(oldUser.id);
           if (error) throw error;
         }
@@ -74,28 +93,28 @@ Deno.serve(async (req) => {
 
     const { data: caller } = await admin.from('profiles').select('id, team_id, role, account_status, is_master_admin').eq('id', user.id).single();
     const isMaster = Boolean(caller?.is_master_admin && caller.account_status === 'active');
-    const isTeamAdmin = Boolean(caller?.role === 'admin' && caller.account_status === 'active' && caller.team_id);
+    const { data: callerMembership } = caller?.team_id
+      ? await admin.from('team_memberships').select('role, status').eq('user_id', user.id).eq('team_id', caller.team_id).maybeSingle()
+      : { data: null };
+    const isTeamAdmin = Boolean(caller?.team_id && callerMembership?.role === 'admin' && callerMembership.status === 'active');
     if (!isMaster && !isTeamAdmin) return json({ error: 'Acesso negado' }, 403);
 
     if (body.action === 'create-team') {
       if (!isMaster) return json({ error: 'Apenas o master pode criar equipes' }, 403);
       const input = body.team;
-      if (!input?.name || !input?.tag || !input?.joinCode) return json({ error: 'Nome, tag e código são obrigatórios' }, 400);
+      if (!input?.name || !input?.tag) return json({ error: 'Nome e tag são obrigatórios' }, 400);
       const teamName = textValue(input.name);
       const teamTag = textValue(input.tag).toUpperCase();
-      const teamCode = textValue(input.joinCode).toUpperCase();
       if (teamName.length < 3 || teamName.length > limits.teamName) return json({ error: 'O nome da equipe deve ter de 3 a 80 caracteres' }, 400);
       if (teamTag.length < 2 || teamTag.length > limits.teamTag) return json({ error: 'A tag deve ter de 2 a 24 caracteres' }, 400);
-      if (teamCode.length < 6 || teamCode.length > limits.teamCode) return json({ error: 'O código deve ter de 6 a 64 caracteres' }, 400);
       const { data: team, error } = await admin.from('teams').insert({
         name: teamName,
         tag: teamTag,
-        join_code: teamCode,
         created_by: user.id,
       }).select('id, name, tag, join_code, logo_url, created_by').single();
       if (error) throw error;
       if (input.adminUserId) {
-        const { error: assignError } = await admin.from('profiles').update({ team_id: team.id, role: 'admin', account_status: 'active' }).eq('id', input.adminUserId).eq('is_master_admin', false);
+        const { error: assignError } = await admin.from('team_memberships').upsert({ team_id: team.id, user_id: input.adminUserId, role: 'admin', status: 'active' });
         if (assignError) { await admin.from('teams').delete().eq('id', team.id); throw assignError; }
       }
       return json({ team }, 201);
@@ -103,15 +122,14 @@ Deno.serve(async (req) => {
 
     if (body.action === 'update-team') {
       if (!isMaster) return json({ error: 'Apenas o master pode editar equipes' }, 403);
-      const allowed = Object.fromEntries(Object.entries(body.changes || {}).filter(([key]) => ['name', 'tag', 'join_code', 'logo_url'].includes(key)));
+      const allowed = Object.fromEntries(Object.entries(body.changes || {}).filter(([key]) => ['name', 'tag', 'logo_url'].includes(key)));
       if (typeof allowed.name === 'string') { allowed.name = allowed.name.trim(); if (allowed.name.length < 3 || allowed.name.length > limits.teamName) return json({ error: 'Nome da equipe inválido' }, 400); }
       if (typeof allowed.tag === 'string') { allowed.tag = allowed.tag.trim().toUpperCase(); if (allowed.tag.length < 2 || allowed.tag.length > limits.teamTag) return json({ error: 'Tag da equipe inválida' }, 400); }
-      if (typeof allowed.join_code === 'string') { allowed.join_code = allowed.join_code.trim().toUpperCase(); if (allowed.join_code.length < 6 || allowed.join_code.length > limits.teamCode) return json({ error: 'Código da equipe inválido' }, 400); }
       if (typeof allowed.logo_url === 'string' && allowed.logo_url.length > 500) return json({ error: 'Referência do logo muito longa' }, 400);
       const { error } = await admin.from('teams').update(allowed).eq('id', body.teamId);
       if (error) throw error;
       if (body.adminUserId) {
-        const { error: assignError } = await admin.from('profiles').update({ team_id: body.teamId, role: 'admin', account_status: 'active' }).eq('id', body.adminUserId).eq('is_master_admin', false);
+        const { error: assignError } = await admin.from('team_memberships').upsert({ team_id: body.teamId, user_id: body.adminUserId, role: 'admin', status: 'active' });
         if (assignError) throw assignError;
       }
       return json({ ok: true });
@@ -119,8 +137,7 @@ Deno.serve(async (req) => {
 
     if (body.action === 'delete-team') {
       if (!isMaster) return json({ error: 'Apenas o master pode remover equipes' }, 403);
-      const { count } = await admin.from('profiles').select('id', { count: 'exact', head: true }).eq('team_id', body.teamId);
-      if (count) return json({ error: 'Remova ou transfira os membros antes de excluir a equipe' }, 409);
+      await removeStorageFolder(admin, 'team-logos', textValue(body.teamId));
       const { error } = await admin.from('teams').delete().eq('id', body.teamId);
       if (error) throw error;
       return json({ ok: true });
@@ -129,22 +146,29 @@ Deno.serve(async (req) => {
     if (body.action === 'create-user') {
       if (!isMaster) return json({ error: 'Apenas o master pode criar usuários diretamente' }, 403);
       const input = body.user;
-      if (!input?.email || !input?.password || !input?.name || !input?.nickname || !input?.teamId) return json({ error: 'Dados obrigatórios ausentes' }, 400);
+      const teamIds = uniqueIds(input?.teamIds);
+      if (!input?.email || !input?.password || !input?.name || !input?.nickname || !teamIds.length) return json({ error: 'Dados obrigatórios ausentes' }, 400);
       if (!validName(input.name)) return json({ error: 'Nome inválido' }, 400);
       if (!validNickname(input.nickname)) return json({ error: 'Apelido inválido' }, 400);
       if (!validEmail(input.email)) return json({ error: 'E-mail inválido' }, 400);
       if (!validPhone(input.phone)) return json({ error: 'Telefone inválido' }, 400);
       if (!validPassword(input.password)) return json({ error: 'A senha não atende aos requisitos de segurança' }, 400);
-      const { data: team, error: teamError } = await admin.from('teams').select('join_code').eq('id', input.teamId).single();
+      const { data: teams, error: teamError } = await admin.from('teams').select('id, join_code').in('id', teamIds);
       if (teamError) throw teamError;
+      if (teams.length !== teamIds.length) return json({ error: 'Uma ou mais equipes não existem' }, 400);
+      const primaryTeam = teams.find((team) => team.id === teamIds[0])!;
+      const memberRole = input.role === 'admin' ? 'admin' : 'driver';
       const { data: created, error } = await admin.auth.admin.createUser({
         email: textValue(input.email).toLowerCase(),
         password: input.password,
         email_confirm: true,
-        user_metadata: { name: textValue(input.name), nickname: textValue(input.nickname), phone: normalizePhone(input.phone), team_code: team.join_code },
+        user_metadata: { name: textValue(input.name), nickname: textValue(input.nickname), phone: normalizePhone(input.phone), team_code: primaryTeam.join_code },
       });
       if (error) throw error;
-      const { error: profileError } = await admin.from('profiles').update({ role: input.role === 'admin' ? 'admin' : 'driver', account_status: 'active' }).eq('id', created.user.id);
+      const memberships = teamIds.map((teamId) => ({ team_id: teamId, user_id: created.user.id, role: memberRole, status: 'active' }));
+      const { error: membershipError } = await admin.from('team_memberships').upsert(memberships);
+      if (membershipError) { await admin.auth.admin.deleteUser(created.user.id); throw membershipError; }
+      const { error: profileError } = await admin.from('profiles').update({ team_id: teamIds[0], role: memberRole, account_status: 'active' }).eq('id', created.user.id);
       if (profileError) throw profileError;
       return json({ id: created.user.id }, 201);
     }
@@ -152,36 +176,80 @@ Deno.serve(async (req) => {
     const { data: target } = await admin.from('profiles').select('*').eq('id', body.userId).single();
     if (!target) return json({ error: 'Usuário não encontrado' }, 404);
     if (target.is_master_admin) return json({ error: 'A conta master é protegida' }, 403);
-    if (!isMaster && target.team_id !== caller.team_id) return json({ error: 'Usuário fora da equipe' }, 404);
+    const { data: targetMembership } = !isMaster && caller?.team_id
+      ? await admin.from('team_memberships').select('role, status').eq('user_id', target.id).eq('team_id', caller.team_id).maybeSingle()
+      : { data: null };
+    if (!isMaster && !targetMembership) return json({ error: 'Usuário fora da equipe' }, 404);
     if (!isMaster && target.id === user.id) return json({ error: 'Você não pode alterar a própria função' }, 400);
 
     if (body.action === 'update-user') {
-      const masterFields = ['name', 'nickname', 'phone', 'team_id', 'role', 'account_status'];
-      const teamAdminFields = ['role', 'account_status'];
-      const allowedKeys = isMaster ? masterFields : teamAdminFields;
-      const changes = Object.fromEntries(Object.entries(body.changes || {}).filter(([key]) => allowedKeys.includes(key)));
-      if (changes.name !== undefined && !validName(changes.name)) return json({ error: 'Nome inválido' }, 400);
-      if (changes.nickname !== undefined && !validNickname(changes.nickname)) return json({ error: 'Apelido inválido' }, 400);
-      if (changes.phone !== undefined) { if (!validPhone(changes.phone)) return json({ error: 'Telefone inválido' }, 400); changes.phone = normalizePhone(changes.phone); }
-      if (!isMaster && changes.role && !['driver', 'admin'].includes(String(changes.role))) return json({ error: 'Função inválida' }, 400);
-      if (!isMaster && changes.account_status && !['active', 'inactive'].includes(String(changes.account_status))) return json({ error: 'Status inválido' }, 400);
+      const requested = body.changes || {};
+      const profileChanges: Record<string, unknown> = {};
+      if (isMaster && requested.name !== undefined) { if (!validName(requested.name)) return json({ error: 'Nome inválido' }, 400); profileChanges.name = textValue(requested.name); }
+      if (isMaster && requested.nickname !== undefined) { if (!validNickname(requested.nickname)) return json({ error: 'Apelido inválido' }, 400); profileChanges.nickname = textValue(requested.nickname); }
+      if (isMaster && requested.phone !== undefined) { if (!validPhone(requested.phone)) return json({ error: 'Telefone inválido' }, 400); profileChanges.phone = normalizePhone(requested.phone); }
+      const role = requested.role === 'admin' ? 'admin' : requested.role === 'driver' ? 'driver' : undefined;
+      const status = ['active', 'inactive', 'pending'].includes(String(requested.account_status)) ? requested.account_status : undefined;
+      if (requested.role !== undefined && !role) return json({ error: 'Função inválida' }, 400);
+      if (requested.account_status !== undefined && !status) return json({ error: 'Status inválido' }, 400);
       const authChanges: { email?: string; password?: string } = {};
-      if (isMaster && body.changes?.email) { if (!validEmail(body.changes.email)) return json({ error: 'E-mail inválido' }, 400); authChanges.email = textValue(body.changes.email).toLowerCase(); }
-      if (isMaster && body.changes?.password) { if (!validPassword(body.changes.password)) return json({ error: 'A senha não atende aos requisitos de segurança' }, 400); authChanges.password = body.changes.password; }
+      if (isMaster && requested.email) { if (!validEmail(requested.email)) return json({ error: 'E-mail inválido' }, 400); authChanges.email = textValue(requested.email).toLowerCase(); }
+      if (isMaster && requested.password) { if (!validPassword(requested.password)) return json({ error: 'A senha não atende aos requisitos de segurança' }, 400); authChanges.password = requested.password; }
       if (Object.keys(authChanges).length) {
         const { error } = await admin.auth.admin.updateUserById(target.id, authChanges);
         if (error) throw error;
-        if (authChanges.email) changes.email = authChanges.email;
+        if (authChanges.email) profileChanges.email = authChanges.email;
       }
-      const { error } = await admin.from('profiles').update(changes).eq('id', target.id);
-      if (error) throw error;
-      if (changes.account_status && changes.account_status !== 'active') {
+
+      if (isMaster && Array.isArray(requested.team_ids)) {
+        const teamIds = uniqueIds(requested.team_ids);
+        if (!teamIds.length) return json({ error: 'Selecione ao menos uma equipe' }, 400);
+        const { data: existingTeams, error: teamError } = await admin.from('teams').select('id').in('id', teamIds);
+        if (teamError) throw teamError;
+        if (existingTeams.length !== teamIds.length) return json({ error: 'Uma ou mais equipes não existem' }, 400);
+        const { data: currentMemberships, error: currentError } = await admin.from('team_memberships').select('team_id').eq('user_id', target.id);
+        if (currentError) throw currentError;
+        const membershipRole = role ?? target.role;
+        const membershipStatus = status ?? target.account_status;
+        const { error: upsertError } = await admin.from('team_memberships').upsert(teamIds.map((teamId) => ({ team_id: teamId, user_id: target.id, role: membershipRole, status: membershipStatus })));
+        if (upsertError) throw upsertError;
+        for (const membership of currentMemberships ?? []) {
+          if (!teamIds.includes(membership.team_id)) {
+            const { error: removeError } = await admin.from('team_memberships').delete().eq('team_id', membership.team_id).eq('user_id', target.id);
+            if (removeError) throw removeError;
+          }
+        }
+        Object.assign(profileChanges, { team_id: teamIds[0], role: membershipRole, account_status: membershipStatus });
+      } else {
+        const teamId = isMaster ? target.team_id : caller!.team_id;
+        if (teamId && (role || status)) {
+          const membershipChanges = { ...(role ? { role } : {}), ...(status ? { status } : {}) };
+          const { error: membershipError } = await admin.from('team_memberships').update(membershipChanges).eq('team_id', teamId).eq('user_id', target.id);
+          if (membershipError) throw membershipError;
+        }
+      }
+
+      if (Object.keys(profileChanges).length) {
+        const { error } = await admin.from('profiles').update(profileChanges).eq('id', target.id);
+        if (error) throw error;
+      }
+      if (status && status !== 'active') {
         await admin.from('driver_locations').update({ is_online: false, last_online_at: new Date().toISOString() }).eq('user_id', target.id);
       }
       return json({ ok: true });
     }
 
+    if (body.action === 'remove-team-member') {
+      const teamId = isMaster ? textValue(body.teamId) : caller!.team_id!;
+      if (!teamId) return json({ error: 'Equipe inválida' }, 400);
+      const { error } = await admin.from('team_memberships').delete().eq('team_id', teamId).eq('user_id', target.id);
+      if (error) throw error;
+      return json({ ok: true });
+    }
+
     if (body.action === 'delete-user') {
+      if (!isMaster) return json({ error: 'Apenas o master pode excluir uma conta definitivamente' }, 403);
+      await removeStorageFolder(admin, 'avatars', target.id);
       const { error } = await admin.auth.admin.deleteUser(target.id);
       if (error) throw error;
       return json({ ok: true });

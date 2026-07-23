@@ -1,6 +1,6 @@
 import * as Linking from 'expo-linking';
 import { router } from 'expo-router';
-import { Crosshair, MessageCircle, Navigation, Phone, X } from 'lucide-react-native';
+import { LocateFixed, MessageCircle, Navigation, Phone, X } from 'lucide-react-native';
 import { Pressable, StyleSheet, View } from 'react-native';
 import { Avatar } from './avatar';
 import { AppText, StatusDot } from './ui';
@@ -12,11 +12,12 @@ import { formatDistance, formatSpeed, isStale, relativeTime } from '@/utils/form
 type DriverSheetProps = {
   driver: DriverWithLocation;
   distance?: number | null;
-  onCenter: () => void;
+  onFollow: () => void;
+  following?: boolean;
   onClose?: () => void;
 };
 
-export function DriverSheet({ driver, distance, onCenter, onClose }: DriverSheetProps) {
+export function DriverSheet({ driver, distance, onFollow, following = false, onClose }: DriverSheetProps) {
   const palette = useVelocityTheme();
   const location = driver.location!;
   const speed = formatSpeed(location.speed);
@@ -27,7 +28,7 @@ export function DriverSheet({ driver, distance, onCenter, onClose }: DriverSheet
     { label: 'Ligar', Icon: Phone, action: () => Linking.openURL(`tel:${phone}`), disabled: !phone },
     { label: 'WhatsApp', Icon: MessageCircle, action: () => Linking.openURL(`https://wa.me/${whatsAppPhone}`), disabled: !phone },
     { label: 'Rota', Icon: Navigation, action: () => Linking.openURL(`https://www.google.com/maps/dir/?api=1&destination=${location.latitude},${location.longitude}`) },
-    { label: 'Centralizar', Icon: Crosshair, action: onCenter },
+    { label: following ? 'Seguindo' : 'Acompanhar', Icon: LocateFixed, action: onFollow },
   ];
 
   return <View style={[styles.sheet, { backgroundColor: palette.card, borderColor: palette.border }]}>

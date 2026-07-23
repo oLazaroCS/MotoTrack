@@ -7,7 +7,7 @@ import { ActionIcon, PageIntro, SectionLabel, StatCard } from '@/components/desi
 import { AppText, Card, Field, Screen, StatusDot } from '@/components/ui';
 import { spacing } from '@/constants/theme';
 import { useTeamDrivers } from '@/hooks/use-team-drivers';
-import { deleteManagedUser, updateManagedUser } from '@/services/admin';
+import { removeManagedTeamMember, updateManagedUser } from '@/services/admin';
 import { useAuthStore } from '@/stores/auth-store';
 import type { DriverWithLocation } from '@/types/domain';
 import { isStale, relativeTime } from '@/utils/format';
@@ -31,7 +31,7 @@ export default function AdminScreen() {
   const run = async (work: () => Promise<unknown>) => { setBusy(true); try { await work(); await refresh(); } catch (error) { Alert.alert('Operação não concluída', error instanceof Error ? error.message : 'Tente novamente.'); } finally { setBusy(false); } };
   const approve = (member: DriverWithLocation) => void run(() => updateManagedUser(member.id, { account_status: 'active' }));
   const toggleRole = (member: DriverWithLocation) => void run(() => updateManagedUser(member.id, { role: member.role === 'admin' ? 'driver' : 'admin' }));
-  const expel = (member: DriverWithLocation) => Alert.alert('Expulsar membro?', `${member.name} perderá o acesso à equipe e precisará ser cadastrado novamente.`, [{ text: 'Cancelar' }, { text: 'Expulsar', style: 'destructive', onPress: () => void run(() => deleteManagedUser(member.id)) }]);
+  const expel = (member: DriverWithLocation) => Alert.alert('Expulsar membro?', `${member.name} perderá o acesso somente a esta equipe. A conta e os outros grupos serão preservados.`, [{ text: 'Cancelar' }, { text: 'Expulsar', style: 'destructive', onPress: () => void run(() => removeManagedTeamMember(member.id, profile.team_id!)) }]);
 
   return <Screen scroll={false}>
     <PageIntro eyebrow="Gestão do grupo" title="Administração da equipe" subtitle="Aprove solicitações e gerencie os administradores do grupo."/>

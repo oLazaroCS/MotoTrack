@@ -28,6 +28,7 @@ export default function TeamMapWebScreen() {
   const [mapReady, setMapReady] = useState(false);
   const [locating, setLocating] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null | undefined>(undefined);
+  const [followingId, setFollowingId] = useState<string | null>(null);
 
   const online = useMemo(() => data?.filter((driver) => driver.location?.is_online && !isStale(driver.location.updated_at, 2)) ?? [], [data]);
   const selected = online.find((driver) => driver.id === (selectedId === undefined ? driverId : selectedId)) ?? null;
@@ -39,7 +40,9 @@ export default function TeamMapWebScreen() {
     const instance = new maplibregl.Map({ container: container.current, style: MAP_STYLE_URL, center: [-46.6333, -23.5505], zoom: 11, attributionControl: { compact: true } });
     instance.addControl(new maplibregl.NavigationControl({ showCompass: true }), 'top-right');
     instance.on('load', () => setMapReady(true));
-    instance.on('click', () => setSelectedId(null));
+    instance.on('click', () => { setFollowingId(null); setSelectedId(null); });
+    instance.on('dragstart', (event) => { if (event.originalEvent) setFollowingId(null); });
+    instance.on('zoomstart', (event) => { if (event.originalEvent) setFollowingId(null); });
     map.current = instance;
     return () => { markerRegistry.forEach((entry) => entry.marker.remove()); markerRegistry.clear(); instance.remove(); map.current = null; };
   }, []);
@@ -65,6 +68,13 @@ export default function TeamMapWebScreen() {
       entry.marker.setLngLat([location.longitude, location.latitude]);
     });
   }, [online, selected?.id]);
+
+  useEffect(() => {
+    if (!followingId || !map.current) return;
+    const followed = online.find((driver) => driver.id === followingId);
+    if (!followed?.location) return;
+    map.current.easeTo({ center: [followed.location.longitude, followed.location.latitude], zoom: 16, duration: 850 });
+  }, [followingId, online]);
 
   useEffect(() => {
     if (!mapReady || !driverId || !selected || handledDriver.current === driverId || !map.current) return;
@@ -96,6 +106,7 @@ export default function TeamMapWebScreen() {
     }
   };
   const center = (driver: DriverWithLocation) => { if (map.current) centerDriver(map.current, driver); };
+  const follow = (driver: DriverWithLocation) => { setFollowingId(driver.id); center(driver); };
 
   return <View style={styles.fill}>
     <div ref={container} style={{ position: 'absolute', inset: 0 }} />
@@ -103,7 +114,7 @@ export default function TeamMapWebScreen() {
     <Button accessibilityLabel="Minha localização" title="" variant="accent" loading={locating} icon={<Crosshair size={24} color={colors.navy}/>} onPress={myLocation} style={styles.locate}/>
     {isLoading || !mapReady ? <View style={styles.loading}><ActivityIndicator color={colors.amber}/></View> : null}
     {!isLoading && mapReady && !online.length ? <View style={styles.empty}><AppText weight="700" style={styles.overlayText}>Ninguém online no momento</AppText><AppText size={13} style={styles.overlayMuted}>Os marcadores aparecem automaticamente.</AppText></View> : null}
-    {selected ? <DriverSheet driver={selected} distance={distanceKm(me, selected.location)} onCenter={() => center(selected)} onClose={() => setSelectedId(null)}/> : null}
+    {selected ? <DriverSheet driver={selected} distance={distanceKm(me, selected.location)} following={followingId === selected.id} onFollow={() => follow(selected)} onClose={() => { setFollowingId(null); setSelectedId(null); }}/> : null}
   </View>;
 }
 

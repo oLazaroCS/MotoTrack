@@ -24,16 +24,19 @@ export function useTeamDrivers(teamId?: string) {
     if (!teamId) return;
     const channelId = Math.random().toString(36).slice(2);
     const channel = supabase.channel(`team-locations:${teamId}:${channelId}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'driver_locations', filter: `team_id=eq.${teamId}` }, (payload) => {
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'driver_locations' }, (payload) => {
         const next = payload.new as DriverLocation;
         if (!next?.user_id || Date.now() - new Date(next.updated_at).getTime() > 15 * 60_000) return;
         client.setQueryData<Awaited<ReturnType<typeof fetchTeamDrivers>>>(['drivers', teamId], (current) =>
           current?.map((driver) => driver.id === next.user_id ? { ...driver, location: next } : driver));
       })
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'profiles', filter: `team_id=eq.${teamId}` }, () => {
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'profiles' }, () => {
         // Profile changes are less frequent and may include a new private avatar
         // path. Refetching also creates a fresh signed URL for every client.
         invalidateAvatarCache();
+        void client.invalidateQueries({ queryKey: ['drivers', teamId] });
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'team_memberships', filter: `team_id=eq.${teamId}` }, () => {
         void client.invalidateQueries({ queryKey: ['drivers', teamId] });
       })
       .subscribe((status) => {

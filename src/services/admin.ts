@@ -1,6 +1,7 @@
 import type { AccountStatus, Profile, Team, UserRole } from '@/types/domain';
 import { supabase } from './supabase';
 import { signedAvatarUrl } from './avatars';
+import { prepareImageForUpload } from './images';
 
 export type CreateManagedUser = {
   name: string;
@@ -9,7 +10,7 @@ export type CreateManagedUser = {
   phone: string;
   password: string;
   role: UserRole;
-  teamId: string;
+  teamIds: string[];
 };
 
 export type ManagedUserChanges = Partial<{
@@ -18,7 +19,7 @@ export type ManagedUserChanges = Partial<{
   email: string;
   phone: string;
   password: string;
-  team_id: string;
+  team_ids: string[];
   role: UserRole;
   account_status: AccountStatus;
 }>;
@@ -33,9 +34,10 @@ async function invokeAdmin(body: Record<string, unknown>) {
 export const createManagedUser = (user: CreateManagedUser) => invokeAdmin({ action: 'create-user', user });
 export const updateManagedUser = (userId: string, changes: ManagedUserChanges) => invokeAdmin({ action: 'update-user', userId, changes });
 export const deleteManagedUser = (userId: string) => invokeAdmin({ action: 'delete-user', userId });
-export const createManagedTeam = (team: { name: string; tag: string; joinCode: string; adminUserId?: string }) => invokeAdmin({ action: 'create-team', team });
-export const updateManagedTeam = (teamId: string, changes: Partial<Pick<Team, 'name' | 'tag' | 'join_code' | 'logo_url'>>, adminUserId?: string) => invokeAdmin({ action: 'update-team', teamId, changes, adminUserId });
+export const createManagedTeam = (team: { name: string; tag: string; adminUserId?: string }) => invokeAdmin({ action: 'create-team', team });
+export const updateManagedTeam = (teamId: string, changes: Partial<Pick<Team, 'name' | 'tag' | 'logo_url'>>, adminUserId?: string) => invokeAdmin({ action: 'update-team', teamId, changes, adminUserId });
 export const deleteManagedTeam = (teamId: string) => invokeAdmin({ action: 'delete-team', teamId });
+export const removeManagedTeamMember = (userId: string, teamId: string) => invokeAdmin({ action: 'remove-team-member', userId, teamId });
 
 export async function fetchManagedTeams(): Promise<Team[]> {
   const { data, error } = await supabase.from('teams').select('id, name, tag, join_code, logo_url, created_by').order('name');
@@ -49,12 +51,18 @@ export async function fetchManagedUsers(): Promise<Profile[]> {
   return Promise.all((data as Profile[]).map(async (profile) => ({ ...profile, avatar_url: await signedAvatarUrl(profile.avatar_url) })));
 }
 
+export async function fetchManagedMemberships(): Promise<import('@/types/domain').TeamMembership[]> {
+  const { data, error } = await supabase.from('team_memberships').select('*').order('created_at');
+  if (error) throw error;
+  return data as import('@/types/domain').TeamMembership[];
+}
+
 export async function uploadTeamLogo(teamId: string, uri: string) {
-  const extension = uri.split('.').pop()?.toLowerCase() || 'jpg';
-  const response = await fetch(uri);
+  const prepared = await prepareImageForUpload(uri);
+  const response = await fetch(prepared.uri);
   const buffer = await response.arrayBuffer();
-  const path = `${teamId}/logo.${extension}`;
-  const { error } = await supabase.storage.from('team-logos').upload(path, buffer, { upsert: true, contentType: response.headers.get('content-type') || 'image/jpeg' });
+  const path = `${teamId}/logo.jpg`;
+  const { error } = await supabase.storage.from('team-logos').upload(path, buffer, { upsert: true, contentType: 'image/jpeg', cacheControl: '3600' });
   if (error) throw error;
   return path;
 }
