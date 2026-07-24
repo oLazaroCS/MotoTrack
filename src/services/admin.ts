@@ -54,7 +54,7 @@ export async function fetchManagedUsers(): Promise<Profile[]> {
 export async function fetchManagedMemberships(): Promise<import('@/types/domain').TeamMembership[]> {
   const { data, error } = await supabase.from('team_memberships').select('*').order('created_at');
   if (error) throw error;
-  return data as import('@/types/domain').TeamMembership[];
+  return [...new Map((data ?? []).map((membership) => [`${membership.team_id}:${membership.user_id}`, membership])).values()] as import('@/types/domain').TeamMembership[];
 }
 
 export async function uploadTeamLogo(teamId: string, uri: string) {

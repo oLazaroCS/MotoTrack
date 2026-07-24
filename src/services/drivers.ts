@@ -49,7 +49,8 @@ export async function uploadAvatar(userId: string, uri: string) {
 export async function fetchMyTeams(): Promise<(TeamMembership & { team: Team })[]> {
   const { data, error } = await supabase.from('team_memberships').select('team_id, role, status, created_at, teams(id, name, tag, join_code, logo_url, created_by)').order('created_at');
   if (error) throw error;
-  return Promise.all((data ?? []).map(async (membership) => {
+  const uniqueMemberships = [...new Map((data ?? []).map((membership) => [membership.team_id, membership])).values()];
+  return Promise.all(uniqueMemberships.map(async (membership) => {
     const team = membership.teams as unknown as Team;
     const { teams: _teams, ...membershipData } = membership;
     return { ...(membershipData as TeamMembership), team: { ...team, logo_url: await signedTeamLogoUrl(team.logo_url) } };
