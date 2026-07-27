@@ -10,7 +10,7 @@
   [![TypeScript](https://img.shields.io/badge/TypeScript-6-3178C6?style=for-the-badge&logo=typescript)](https://www.typescriptlang.org/)
   [![Supabase](https://img.shields.io/badge/Supabase-Realtime-3FCF8E?style=for-the-badge&logo=supabase&logoColor=white)](https://supabase.com/)
   [![Version](https://img.shields.io/badge/Version-1.2.0-FFC107?style=for-the-badge&logo=semanticrelease&logoColor=black)](#versão-e-builds)
-  [![Private](https://img.shields.io/badge/Repository-Private-FFC107?style=for-the-badge&logo=github&logoColor=black)](#licença-e-uso)
+  [![Public](https://img.shields.io/badge/Repository-Public-2EA44F?style=for-the-badge&logo=github&logoColor=white)](#licença-e-uso)
 </div>
 
 ---
@@ -167,11 +167,13 @@ npx supabase link --project-ref SEU_PROJECT_REF
 npx supabase db push
 ```
 
-Publique a função administrativa com verificação JWT habilitada:
+Publique a função administrativa usando a validação de sessão implementada pela própria função:
 
 ```bash
-npx supabase functions deploy admin-users
+npx supabase functions deploy admin-users --no-verify-jwt
 ```
+
+A função valida explicitamente o token recebido com `auth.getUser()` e confere no banco se o chamador é master ou administrador da equipe antes de executar cada ação. O fluxo de bootstrap é separado e exige um segredo exclusivo.
 
 As variáveis `SUPABASE_URL`, `SUPABASE_ANON_KEY` e `SUPABASE_SERVICE_ROLE_KEY` são fornecidas automaticamente à Edge Function pelo ambiente hospedado. O segredo de bootstrap, quando usado durante a implantação inicial controlada, deve existir somente no ambiente do Supabase e ser removido após a criação do primeiro master.
 
@@ -236,6 +238,7 @@ A tela **Configurações** lê `expo.version` automaticamente; portanto, não ex
 ## Segurança e privacidade
 
 - O `.env` real é ignorado pelo Git; somente `.env.example` é versionado.
+- A chave `EXPO_PUBLIC_SUPABASE_ANON_KEY` é uma chave publicável de cliente, não uma credencial administrativa; a proteção dos dados depende das políticas RLS versionadas no projeto.
 - A service role existe apenas na Edge Function hospedada.
 - Operações administrativas exigem usuário autenticado e conferência de função.
 - IDs de membros são normalizados e globalmente únicos no banco.
@@ -288,7 +291,9 @@ Confirme as policies do bucket `avatars`. O app transforma o caminho privado sal
 
 ## Licença e uso
 
-Projeto proprietário e repositório privado. O código, identidade visual e documentação não podem ser redistribuídos ou utilizados fora da autorização do proprietário.
+O repositório é público para consulta e colaboração, mas não possui licença open source. Na ausência de uma licença expressa, todos os direitos sobre o código, identidade visual e documentação permanecem reservados ao proprietário.
+
+Falhas de segurança não devem ser publicadas em issues. Consulte a [política de segurança](SECURITY.md) para realizar um relato responsável.
 
 ---
 
