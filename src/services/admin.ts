@@ -2,6 +2,7 @@ import type { AccountStatus, Profile, Team, UserRole } from '@/types/domain';
 import { supabase } from './supabase';
 import { signedAvatarUrl } from './avatars';
 import { prepareImageForUpload } from './images';
+import { invalidateTeamLogoCache, signedTeamLogoUrl } from './team-logos';
 
 export type CreateManagedUser = {
   name: string;
@@ -25,10 +26,35 @@ export type ManagedUserChanges = Partial<{
 }>;
 
 async function invokeAdmin(body: Record<string, unknown>) {
-  const { data, error } = await supabase.functions.invoke('admin-users', { body });
-  if (error) throw error;
+  const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+  if (sessionError || !sessionData.session) throw new Error('Sua sessão expirou. Entre novamente para continuar.');
+  const { data, error } = await supabase.functions.invoke('admin-users', {
+    body,
+    headers: { Authorization: `Bearer ${sessionData.session.access_token}` },
+  });
+  if (error) throw new Error(await edgeFunctionErrorMessage(error));
   if (data?.error) throw new Error(data.error);
   return data;
+}
+
+async function edgeFunctionErrorMessage(error: unknown) {
+  const fallback = error instanceof Error ? error.message : 'Não foi possível acessar o servidor.';
+  if (!error || typeof error !== 'object' || !('context' in error)) return fallback;
+  const context = (error as { context?: { clone?: () => { json: () => Promise<unknown> }; json?: () => Promise<unknown>; status?: number } }).context;
+  if (!context) return fallback;
+  try {
+    const response = typeof context.clone === 'function' ? context.clone() : context;
+    const payload = typeof response.json === 'function' ? await response.json() : null;
+    if (payload && typeof payload === 'object' && 'error' in payload && typeof payload.error === 'string') {
+      const requestId = 'requestId' in payload && typeof payload.requestId === 'string' ? `\nCódigo: ${payload.requestId}` : '';
+      return `${payload.error}${requestId}`;
+    }
+  } catch {
+    // The SDK may already have consumed a relay error response.
+  }
+  if (context.status === 401) return 'Sua sessão expirou. Entre novamente para continuar.';
+  if (context.status === 403) return 'Sua conta não tem permissão para realizar esta alteração.';
+  return fallback === 'Edge Function returned a non-2xx status code' ? 'O servidor recusou a alteração. Atualize o aplicativo e tente novamente.' : fallback;
 }
 
 export const createManagedUser = (user: CreateManagedUser) => invokeAdmin({ action: 'create-user', user });
@@ -64,11 +90,6 @@ export async function uploadTeamLogo(teamId: string, uri: string) {
   const path = `${teamId}/logo.jpg`;
   const { error } = await supabase.storage.from('team-logos').upload(path, buffer, { upsert: true, contentType: 'image/jpeg', cacheControl: '3600' });
   if (error) throw error;
+  invalidateTeamLogoCache(path);
   return path;
-}
-
-export async function signedTeamLogoUrl(path: string | null) {
-  if (!path || path.startsWith('http')) return path;
-  const { data } = await supabase.storage.from('team-logos').createSignedUrl(path, 60 * 60);
-  return data?.signedUrl ?? null;
 }

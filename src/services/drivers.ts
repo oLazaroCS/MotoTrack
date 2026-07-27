@@ -1,8 +1,12 @@
 import type { DriverLocation, DriverWithLocation, Profile, Team, TeamMembership } from '@/types/domain';
-import { signedTeamLogoUrl } from './admin';
 import { invalidateAvatarCache, signedAvatarUrl } from './avatars';
 import { supabase } from './supabase';
 import { prepareImageForUpload } from './images';
+import { signedTeamLogoUrl } from './team-logos';
+
+export interface DriverAcrossTeams extends DriverWithLocation {
+  team_ids: string[];
+}
 
 export async function fetchTeamDrivers(teamId: string): Promise<DriverWithLocation[]> {
   const { data: memberships, error: membershipError } = await supabase.from('team_memberships').select('*').eq('team_id', teamId);
@@ -44,6 +48,36 @@ export async function uploadAvatar(userId: string, uri: string) {
   if (error) throw error;
   invalidateAvatarCache(path);
   return path;
+}
+
+export async function fetchTeamsDrivers(teamIds: string[]): Promise<DriverAcrossTeams[]> {
+  const uniqueTeamIds = [...new Set(teamIds)];
+  if (!uniqueTeamIds.length) return [];
+  const { data: memberships, error: membershipError } = await supabase
+    .from('team_memberships')
+    .select('team_id, user_id')
+    .in('team_id', uniqueTeamIds)
+    .eq('status', 'active');
+  if (membershipError) throw membershipError;
+  const memberIds = [...new Set((memberships ?? []).map((membership) => membership.user_id))];
+  if (!memberIds.length) return [];
+  const [{ data: profiles, error: profileError }, { data: locations, error: locationError }] = await Promise.all([
+    supabase.from('profiles').select('*').in('id', memberIds).order('name'),
+    supabase.from('driver_locations').select('*').in('user_id', memberIds),
+  ]);
+  if (profileError) throw profileError;
+  if (locationError) throw locationError;
+  const byUser = new Map((locations as DriverLocation[] | null)?.map((item) => [item.user_id, item]));
+  const teamsByUser = new Map<string, string[]>();
+  memberships?.forEach((membership) => {
+    teamsByUser.set(membership.user_id, [...(teamsByUser.get(membership.user_id) ?? []), membership.team_id]);
+  });
+  return Promise.all((profiles as Profile[]).map(async (profile) => ({
+    ...profile,
+    team_ids: teamsByUser.get(profile.id) ?? [],
+    avatar_url: await signedAvatarUrl(profile.avatar_url),
+    location: byUser.get(profile.id) ?? null,
+  })));
 }
 
 export async function fetchMyTeams(): Promise<(TeamMembership & { team: Team })[]> {

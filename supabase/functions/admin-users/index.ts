@@ -34,6 +34,7 @@ async function removeStorageFolder(admin: ReturnType<typeof createClient>, bucke
 }
 
 Deno.serve(async (req) => {
+  const requestId = crypto.randomUUID().slice(0, 8).toUpperCase();
   if (req.method === 'OPTIONS') return new Response('ok', { headers: cors });
   try {
     const url = Deno.env.get('SUPABASE_URL')!;
@@ -185,15 +186,19 @@ Deno.serve(async (req) => {
     if (body.action === 'update-user') {
       const requested = body.changes || {};
       const profileChanges: Record<string, unknown> = {};
-      if (isMaster && requested.name !== undefined) { if (!validName(requested.name)) return json({ error: 'Nome inválido' }, 400); profileChanges.name = textValue(requested.name); }
-      if (isMaster && requested.nickname !== undefined) { if (!validNickname(requested.nickname)) return json({ error: 'Apelido inválido' }, 400); profileChanges.nickname = textValue(requested.nickname); }
-      if (isMaster && requested.phone !== undefined) { if (!validPhone(requested.phone)) return json({ error: 'Telefone inválido' }, 400); profileChanges.phone = normalizePhone(requested.phone); }
+      if (isMaster && requested.name !== undefined) { if (!validName(requested.name)) return json({ error: 'Nome inválido' }, 400); const name = textValue(requested.name); if (name !== target.name) profileChanges.name = name; }
+      if (isMaster && requested.nickname !== undefined) { if (!validNickname(requested.nickname)) return json({ error: 'Apelido inválido' }, 400); const nickname = textValue(requested.nickname); if (nickname !== target.nickname) profileChanges.nickname = nickname; }
+      if (isMaster && requested.phone !== undefined) { if (!validPhone(requested.phone)) return json({ error: 'Telefone inválido' }, 400); const phone = normalizePhone(requested.phone); if (phone !== target.phone) profileChanges.phone = phone; }
       const role = requested.role === 'admin' ? 'admin' : requested.role === 'driver' ? 'driver' : undefined;
       const status = ['active', 'inactive', 'pending'].includes(String(requested.account_status)) ? requested.account_status : undefined;
       if (requested.role !== undefined && !role) return json({ error: 'Função inválida' }, 400);
       if (requested.account_status !== undefined && !status) return json({ error: 'Status inválido' }, 400);
       const authChanges: { email?: string; password?: string } = {};
-      if (isMaster && requested.email) { if (!validEmail(requested.email)) return json({ error: 'E-mail inválido' }, 400); authChanges.email = textValue(requested.email).toLowerCase(); }
+      if (isMaster && requested.email) {
+        if (!validEmail(requested.email)) return json({ error: 'E-mail inválido' }, 400);
+        const email = textValue(requested.email).toLowerCase();
+        if (email !== textValue(target.email).toLowerCase()) authChanges.email = email;
+      }
       if (isMaster && requested.password) { if (!validPassword(requested.password)) return json({ error: 'A senha não atende aos requisitos de segurança' }, 400); authChanges.password = requested.password; }
       if (Object.keys(authChanges).length) {
         const { error } = await admin.auth.admin.updateUserById(target.id, authChanges);
@@ -257,6 +262,8 @@ Deno.serve(async (req) => {
 
     return json({ error: 'Ação inválida' }, 400);
   } catch (error) {
-    return json({ error: error instanceof Error ? error.message : 'Erro interno' }, 500);
+    const message = error instanceof Error ? error.message : 'Erro interno';
+    console.error(`[admin-users:${requestId}]`, message);
+    return json({ error: message, requestId }, 500);
   }
 });

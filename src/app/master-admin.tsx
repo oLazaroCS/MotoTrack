@@ -53,7 +53,7 @@ export default function MasterAdminScreen() {
   }, [memberships, regularUsers]);
 
   if (!profile?.is_master_admin) return <Screen><AppText tone="danger">Acesso exclusivo do administrador master.</AppText></Screen>;
-  const refresh = async () => { await Promise.all([client.invalidateQueries({ queryKey: ['master-teams'] }), client.invalidateQueries({ queryKey: ['master-users'] }), client.invalidateQueries({ queryKey: ['master-memberships'] })]); };
+  const refresh = async () => { await Promise.all([client.invalidateQueries({ queryKey: ['master-teams'] }), client.invalidateQueries({ queryKey: ['master-users'] }), client.invalidateQueries({ queryKey: ['master-memberships'] }), client.invalidateQueries({ queryKey: ['team'] }), client.invalidateQueries({ queryKey: ['my-teams'] })]); };
   const closeTeam = () => { setTeamModal(false); setEditingTeam(null); setTeamForm(emptyTeam); };
   const openTeam = (team?: Team) => { setEditingTeam(team ?? null); setTeamForm(team ? { name: team.name, tag: team.tag, adminUserId: memberships.find((item) => item.team_id === team.id && item.role === 'admin' && item.status === 'active')?.user_id || '', logoUri: '' } : emptyTeam); setTeamModal(true); };
   const closeUser = () => { setUserModal(false); setEditingUser(null); setUserForm(emptyUser); setPasswordEditor(false); };
